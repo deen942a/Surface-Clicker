@@ -39,10 +39,21 @@ const svCursor = document.getElementById('sv-cursor');
 const svCtx = svCanvas.getContext('2d');
 const hueWrap = document.getElementById('hue-wrap');
 const hueThumb = document.getElementById('hue-thumb');
+const statsToggle = document.getElementById('stats-toggle');
 const soundToggle = document.getElementById('sound-toggle');
 soundToggle.addEventListener('change', () => {
   state.soundEnabled = soundToggle.checked;
   persistSettings();
+});
+
+if (statsToggle) statsToggle.addEventListener('change', () => {
+  state.statsEnabled = statsToggle.checked;
+  persistSettings();
+  if (state.statsEnabled) {
+    startSessionPolling();
+  } else {
+    stopSessionPolling();
+  }
 });
 
 let audioCtx = null;
@@ -323,6 +334,7 @@ async function pollSessionStats() {
 }
 function startSessionPolling() {
   stopSessionPolling();
+  if (state.statsEnabled === false) return;
   pollSessionStats();
   sessionPollInterval = setInterval(pollSessionStats, 1000);
 }
@@ -347,6 +359,7 @@ let state = {
   launchOnStartup: false,
   activationKey: { type: 'keyboard', keyName: 'F6', label: 'F6' },
   running: false,
+  statsEnabled: true,
 };
 
 let listeningForKey = false;
@@ -391,6 +404,28 @@ themeSwatches.forEach((el) => {
   startupToggle.addEventListener('change', () => {
     state.launchOnStartup = startupToggle.checked;
     persistSettings();
+  });
+
+  document.getElementById('check-update-btn').addEventListener('click', async () => {
+    const btn = document.getElementById('check-update-btn');
+    const status = document.getElementById('update-status');
+    btn.disabled = true;
+    btn.textContent = 'Checking…';
+    const result = await window.surfaceClicker.checkUpdate();
+    btn.disabled = false;
+    btn.textContent = 'Check';
+    const downloadBtn = document.getElementById('download-update-btn');
+    if (result.error) {
+      status.textContent = `Error: ${result.error}`;
+      downloadBtn.style.display = 'none';
+    } else if (result.hasUpdate) {
+      status.textContent = `Update available: v${result.latest} (you have v${result.current})`;
+      downloadBtn.style.display = '';
+      downloadBtn.onclick = () => window.surfaceClicker.openExternal(result.url);
+    } else {
+      status.textContent = `You're up to date (v${result.current})`;
+      downloadBtn.style.display = 'none';
+    }
   });
 
   uninstallBtn.addEventListener('click', async () => {
@@ -484,8 +519,9 @@ function persistSettings() {
     appLockTarget: state.appLockTarget,
     overlayEnabled: state.overlayEnabled,
     soundEnabled: state.soundEnabled,
-    startupSoundEnabled: state.startupSoundEnabled,
+    statsEnabled: state.statsEnabled,
     performanceMode: state.performanceMode,
+    startupSoundEnabled: state.startupSoundEnabled,
   });
 }
 
@@ -501,7 +537,9 @@ navItems.forEach((item) => {
     });
 
     if (page === 'stats') {
-      startSessionPolling();
+      if (state.statsEnabled !== false && !state.performanceMode) {
+        startSessionPolling();
+      }
     } else {
       stopSessionPolling();
     }
@@ -754,6 +792,7 @@ async function init() {
 
   performanceToggle.checked = !!state.performanceMode;
   document.body.classList.toggle('perf-mode', !!state.performanceMode);
+  statsToggle.checked = state.statsEnabled !== false;
 
   const presets = await window.surfaceClicker.listPresets();
   renderPresets(presets);
@@ -764,6 +803,9 @@ async function init() {
   pages.forEach((p) => {
     p.style.display = p.dataset.page === 'main' ? '' : 'none';
   });
+  const ver = await window.surfaceClicker.getVersion();
+  const verEl = document.getElementById('app-version');
+  if (verEl) verEl.textContent = `v${ver}`;
 }
 
 let startupSoundPlayed = false;
@@ -834,5 +876,3 @@ document.addEventListener('click', (e) => {
 });
 
 applockRefreshBtn.addEventListener('click', refreshOpenWindows);
-
-init();

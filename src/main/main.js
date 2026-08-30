@@ -270,7 +270,41 @@ ipcMain.handle('overlay:toggle', (_e, enabled) => {
   enabled ? overlay.createOverlay() : overlay.destroyOverlay();
   return enabled;
 });
-ipcMain.handle('overlay:setAlwaysOnTop', (_e, val) => {
+ipcMain.handle('app:openExternal', (_e, url) => {
+  const { shell } = require('electron');
+  shell.openExternal(url);
+});
+
+ipcMain.handle('app:checkUpdate', async () => {
+  try {
+    const { net } = require('electron');
+    const request = net.request('https://api.github.com/repos/deen942a/Surface-Clicker/releases/latest');
+    return await new Promise((resolve) => {
+      let data = '';
+      request.on('response', (response) => {
+        response.on('data', (chunk) => { data += chunk.toString(); });
+        response.on('end', () => {
+          try {
+            const json = JSON.parse(data);
+            const latest = json.tag_name?.replace(/^v/, '');
+            const current = require('../../package.json').version;
+            resolve({ latest, current, hasUpdate: latest !== current, url: json.html_url });
+          } catch {
+            resolve({ error: 'Failed to parse response' });
+          }
+        });
+      });
+      request.on('error', () => resolve({ error: 'Network error' }));
+      request.end();
+    });
+  } catch {
+    return { error: 'Update check failed' };
+  }
+});
+
+ipcMain.handle('app:getVersion', () => app.getVersion());
+
+ipcMain.handle('overlay:setAlwaysOnTop', (_e, val) => {  
   overlay.getWindow()?.setAlwaysOnTop(!!val, 'screen-saver');
   return val;
 });

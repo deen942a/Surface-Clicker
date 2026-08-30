@@ -45,4 +45,7 @@ contextBridge.exposeInMainWorld('surfaceClicker', {
   listOpenWindows: () => ipcRenderer.invoke('applock:listWindows'),
 
   toggleOverlay: (enabled) => ipcRenderer.invoke('overlay:toggle', enabled),
-});
+  checkUpdate: () => ipcRenderer.invoke('app:checkUpdate'),
+  openExternal: (url) => ipcRenderer.invoke('app:openExternal', url),
+  getVersion: () => ipcRenderer.invoke('app:getVersion'),}
+);

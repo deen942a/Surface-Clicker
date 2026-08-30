@@ -7,8 +7,9 @@ let mouse, Button;
 try {
   ({ mouse, Button } = require('@nut-tree-fork/nut-js'));
   mouse.config.autoDelayMs = 0;
+  console.log('nut-js loaded OK');
 } catch (err) {
-  console.warn('Could not load @nut-tree-fork/nut-js...');
+  console.error('Failed to load @nut-tree-fork/nut-js:', err);
 }
 
 const BUTTON_MAP = {
@@ -28,7 +29,8 @@ let scheduledTimer = null;
 let cfg = { cps: 1, dutyCycle: 50, clickButton: 'left' };
 let sessionClicks = 0;
 let sessionStart = 0;
-let appSessionClicks = 0;
+let sessionDuration = 0;
+let appSessionClicks = 0; 
 
 const DUTY_CYCLE_THRESHOLD_CPS = 30;
 const TIGHT_LOOP_THRESHOLD_CPS = 80;
@@ -46,12 +48,11 @@ async function doClick(holdMs) {
     }
     sessionClicks++;
     appSessionClicks++;
+    if (sessionClicks % 10 === 0) console.log('clicks:', sessionClicks);
   } catch (err) {
     console.error('Click simulation error:', err);
   }
 }
-
-
 
 function scheduleNext(targetTime) {
   const delay = targetTime - performance.now();
@@ -121,7 +122,8 @@ function stop(onStatus) {
     clearTimeout(scheduledTimer);
     scheduledTimer = null;
   }
-  const session = { clicks: sessionClicks, durationMs: sessionStart ? Date.now() - sessionStart : 0 };
+  sessionDuration = sessionStart ? Date.now() - sessionStart : 0;
+  const session = { clicks: sessionClicks, durationMs: sessionDuration };
   onStatus?.({ running: false, ...session });
   return session;
 }
@@ -130,7 +132,7 @@ function getSessionStats() {
   return {
     running,
     clicks: sessionClicks,
-    durationMs: running && sessionStart ? Date.now() - sessionStart : 0,
+    durationMs: running && sessionStart ? Date.now() - sessionStart : sessionDuration,
   };
 }
 

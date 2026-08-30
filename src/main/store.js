@@ -18,7 +18,8 @@ const store = new Store({
       overlayEnabled: false,
       performanceMode: false,
       soundEnabled: true,
-      startupSoundEnabled: true,  
+      startupSoundEnabled: true,
+      statsEnabled: true,
     },
     presets: [],
     stats: {

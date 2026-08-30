@@ -48,6 +48,9 @@
         <div class="status-dot" id="status-dot"></div>
         <span id="status-text">idle</span>
       </div>
+      <div id="app-version" style="padding:6px 8px 0;font-size:9px;color:rgba(255,255,255,0.15);letter-spacing:0.5px;">
+        v1.0.0
+      </div>
     </aside>
 
     <main class="main">
@@ -174,6 +177,18 @@
             <span class="switch-track"></span>
           </label>
         </div>
+        <div class="section-label">Updates</div>
+        <div class="setting-row">
+          <div class="setting-row-label">
+            <div class="setting-row-title">Check for updates</div>
+            <div class="setting-row-sub" id="update-status">Click to check for a newer version</div>
+          </div>
+          <div style="display:flex;gap:8px;flex-shrink:0;">
+            <button class="btn btn-primary" id="check-update-btn">Check</button>
+            <button class="btn btn-primary" id="download-update-btn" style="display:none;">Download</button>
+          </div>
+        </div>
+
         <div class="section-label">Danger Zone</div>
         <div class="setting-row danger-row">
           <div class="setting-row-label">
@@ -278,6 +293,18 @@
       </div>
       <label class="switch">
         <input type="checkbox" id="overlay-toggle" />
+        <span class="switch-track"></span>
+      </label>
+    </div>
+
+    <div class="section-label">Stats</div>
+    <div class="setting-row">
+      <div class="setting-row-label">
+        <div class="setting-row-title">Enable session stats</div>
+        <div class="setting-row-sub">Disable to reduce IPC overhead during gameplay</div>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="stats-toggle" checked />
         <span class="switch-track"></span>
       </label>
     </div>
