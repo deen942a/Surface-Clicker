@@ -87,7 +87,11 @@ function handleKeyDown(evt) {
 
 function handleKeyUp(evt) {
   const keyName = KEY_NAME_BY_CODE[evt.keycode] || `Key${evt.keycode}`;
-  if (activeBinding?.type === 'keyboard' && activeBinding.keyName === keyName) {
+  if (
+    activeBinding?.type === 'keyboard' &&
+    activeBinding.keyName === keyName &&
+    !captureCallback
+  ) {
     activeHandlers?.onUp?.();
   }
 }
@@ -103,7 +107,12 @@ function handleMouseDown(evt) {
 }
 
 function handleMouseUp(evt) {
-  if (activeBinding?.type === 'mouse' && activeBinding.button === evt.button) {
+  // Guard type too — avoids phantom onUp when capture just consumed a mousedown
+  if (
+    activeBinding?.type === 'mouse' &&
+    activeBinding.button === evt.button &&
+    !captureCallback
+  ) {
     activeHandlers?.onUp?.();
   }
 }

@@ -725,7 +725,9 @@ window.surfaceClicker.onHotkeyDown(() => {
       startClicking();
     }
   } else if (state.mode === 'hold') {
-    if (!holdKeyDown && !state.running) {
+    // If holdKeyDown is already true but we're not running, a previous
+    // mouseup was dropped — reset and restart cleanly
+    if (!state.running) {
       holdKeyDown = true;
       startClicking();
     }
