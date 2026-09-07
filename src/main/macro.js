@@ -12,72 +12,110 @@ try {
 let recording = false;
 let recordStart = 0;
 let events = [];
-let listenersAttached = false;
-let recordHotkeyBinding = null;
+let recordingTriggerBinding = null;
+let recordingStopBinding = null;
+let blockedBindings = [];
 
-function setRecordHotkeyBinding(binding) {
-  recordHotkeyBinding = binding || null;
-}
-
-function isRecordHotkeyMatch(kind, data) {
-  if (!recordHotkeyBinding) return false;
-  if (recordHotkeyBinding.type === 'keyboard' && kind === 'key') return data.keyName === recordHotkeyBinding.keyName;
-  if (recordHotkeyBinding.type === 'mouse' && kind === 'mouse') return data.button === recordHotkeyBinding.button;
-  return false;
-}
-
-const MOVE_INTERVAL_MS = 16; // throttle mousemove to ~60fps to keep files small
+const MOVE_INTERVAL_MS = 16;
 let lastMoveRecorded = 0;
 
-function attachListeners() {
-  if (listenersAttached || !isAvailable) return;
+// Named handler refs so we can remove them cleanly
+let _onMove = null;
+let _onMouseDown = null;
+let _onMouseUp = null;
+let _onKeyDown = null;
+let _onKeyUp = null;
+
+function detachRecordListeners() {
+  if (!uIOhook) return;
+  if (_onMove) uIOhook.off('mousemove', _onMove);
+  if (_onMouseDown) uIOhook.off('mousedown', _onMouseDown);
+  if (_onMouseUp) uIOhook.off('mouseup', _onMouseUp);
+  if (_onKeyDown) uIOhook.off('keydown', _onKeyDown);
+  if (_onKeyUp) uIOhook.off('keyup', _onKeyUp);
+  _onMove = _onMouseDown = _onMouseUp = _onKeyDown = _onKeyUp = null;
+}
+
+function attachRecordListeners() {
+  if (!isAvailable) return;
   ensureStarted();
-  uIOhook.on('mousemove', (e) => {
+  detachRecordListeners();
+
+  _onMove = (e) => {
     if (!recording) return;
     const now = performance.now();
     if (now - lastMoveRecorded < MOVE_INTERVAL_MS) return;
     lastMoveRecorded = now;
     events.push({ t: now - recordStart, type: 'move', x: e.x, y: e.y });
-  });
-  uIOhook.on('mousedown', (e) => {
-    if (recording) events.push({ t: performance.now() - recordStart, type: 'mousedown', button: e.button });
-  });
-  uIOhook.on('mouseup', (e) => {
-    if (recording) events.push({ t: performance.now() - recordStart, type: 'mouseup', button: e.button });
-  });
-  uIOhook.on('keydown', (e) => {
-    if (recording) events.push({ t: performance.now() - recordStart, type: 'keydown', keyName: KEY_NAME_BY_CODE[e.keycode] });
-  });
-  uIOhook.on('keyup', (e) => {
-    if (recording) events.push({ t: performance.now() - recordStart, type: 'keyup', keyName: KEY_NAME_BY_CODE[e.keycode] });
-  });
-  listenersAttached = true;
+  };
+
+  _onMouseDown = (e) => {
+    if (!recording) return;
+    if (recordingTriggerBinding?.type === 'mouse' && recordingTriggerBinding.button === e.button) { recording = false; return; }
+    if (recordingStopBinding?.type === 'mouse' && recordingStopBinding.button === e.button) { recording = false; return; }
+    events.push({ t: performance.now() - recordStart, type: 'mousedown', button: e.button });
+  };
+
+  _onMouseUp = (e) => {
+    if (!recording) return;
+    if (recordingTriggerBinding?.type === 'mouse' && recordingTriggerBinding.button === e.button) { recording = false; return; }
+    if (recordingStopBinding?.type === 'mouse' && recordingStopBinding.button === e.button) { recording = false; return; }
+    events.push({ t: performance.now() - recordStart, type: 'mouseup', button: e.button });
+  };
+
+  _onKeyDown = (e) => {
+    if (!recording) return;
+    const keyName = KEY_NAME_BY_CODE[e.keycode];
+    if (recordingTriggerBinding?.type === 'keyboard' && recordingTriggerBinding.keyName === keyName) { recording = false; return; }
+    if (recordingStopBinding?.type === 'keyboard' && recordingStopBinding.keyName === keyName) { recording = false; return; }
+    events.push({ t: performance.now() - recordStart, type: 'keydown', keyName });
+  };
+
+  _onKeyUp = (e) => {
+    if (!recording) return;
+    const keyName = KEY_NAME_BY_CODE[e.keycode];
+    if (recordingTriggerBinding?.type === 'keyboard' && recordingTriggerBinding.keyName === keyName) { recording = false; return; }
+    if (recordingStopBinding?.type === 'keyboard' && recordingStopBinding.keyName === keyName) { recording = false; return; }
+    events.push({ t: performance.now() - recordStart, type: 'keyup', keyName });
+  };
+
+  uIOhook.on('mousemove', _onMove);
+  uIOhook.on('mousedown', _onMouseDown);
+  uIOhook.on('mouseup', _onMouseUp);
+  uIOhook.on('keydown', _onKeyDown);
+  uIOhook.on('keyup', _onKeyUp);
 }
 
-function startRecording() {
-  attachListeners();
+function startRecording(triggerBinding, stopBinding) {
+  recordingTriggerBinding = triggerBinding || null;
+  recordingStopBinding = stopBinding || null;
+  blockedBindings = [triggerBinding, stopBinding].filter(Boolean);
+  attachRecordListeners();
   events = [];
   recordStart = performance.now();
   lastMoveRecorded = 0;
   recording = true;
 }
 
-function stopRecording() {
+function stopRecording(allHotkeys) {
   recording = false;
-  return events;
+  detachRecordListeners();
+  const allBlocked = [...blockedBindings, ...(allHotkeys || [])].filter(Boolean);
+  const cleaned = events.filter((ev) => {
+    if (ev.type === 'mousedown' || ev.type === 'mouseup') {
+      return !allBlocked.some((b) => b.type === 'mouse' && b.button === ev.button);
+    }
+    if (ev.type === 'keydown' || ev.type === 'keyup') {
+      return !allBlocked.some((b) => b.type === 'keyboard' && b.keyName === ev.keyName);
+    }
+    return true;
+  });
+  blockedBindings = [];
+  return cleaned;
 }
 
-const MOUSE_BTN_MAP = {
-  1: () => Button.LEFT,
-  2: () => Button.RIGHT,
-  3: () => Button.MIDDLE,
-  4: () => Button.BUTTON_4,
-  5: () => Button.BUTTON_5,
-};
+const MOUSE_BTN_MAP = { 1: () => Button.LEFT, 2: () => Button.RIGHT, 3: () => Button.MIDDLE };
 
-// Best-effort uiohook keyName -> nut-js Key resolution. Reliable for letters/
-// digits/F-keys; special keys fall back to a small alias table and otherwise
-// are skipped (with a console warning) rather than throwing.
 const KEY_ALIASES = {
   Escape: 'Escape', Space: 'Space', Backspace: 'Backspace', Tab: 'Tab',
   Return: 'Return', Enter: 'Return', Shift: 'LeftShift', ShiftRight: 'RightShift',
@@ -100,7 +138,7 @@ function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-async function playOnce(macroEvents, token) {
+async function playOnce(macroEvents, token, triggerBinding) {
   let last = 0;
   for (const ev of macroEvents) {
     if (token !== playToken) return false;
@@ -112,36 +150,45 @@ async function playOnce(macroEvents, token) {
     try {
       if (ev.type === 'move' && mouse && Point) {
         await mouse.setPosition(new Point(ev.x, ev.y));
-      } else if (ev.type === 'mousedown' && mouse) {
-        await mouse.pressButton((MOUSE_BTN_MAP[ev.button] || MOUSE_BTN_MAP[1])());
-      } else if (ev.type === 'mouseup' && mouse) {
-        await mouse.releaseButton((MOUSE_BTN_MAP[ev.button] || MOUSE_BTN_MAP[1])());
-      } else if (ev.type === 'keydown' && keyboard) {
-        const k = resolveNutKey(ev.keyName);
-        if (k !== null) await keyboard.pressKey(k);
-        else console.warn('macro: no key mapping for', ev.keyName);
-      } else if (ev.type === 'keyup' && keyboard) {
-        const k = resolveNutKey(ev.keyName);
-        if (k !== null) await keyboard.releaseKey(k);
+      } else if ((ev.type === 'mousedown' || ev.type === 'mouseup') && mouse) {
+        if (triggerBinding?.type === 'mouse' && triggerBinding.button === ev.button) {
+          // skip trigger button
+        } else if (ev.type === 'mousedown') {
+          await mouse.pressButton((MOUSE_BTN_MAP[ev.button] || MOUSE_BTN_MAP[1])());
+        } else {
+          await mouse.releaseButton((MOUSE_BTN_MAP[ev.button] || MOUSE_BTN_MAP[1])());
+        }
+      } else if ((ev.type === 'keydown' || ev.type === 'keyup') && keyboard) {
+        if (triggerBinding?.type === 'keyboard' && triggerBinding.keyName === ev.keyName) {
+          // skip trigger key
+        } else {
+          const k = resolveNutKey(ev.keyName);
+          if (ev.type === 'keydown') {
+            if (k !== null) await keyboard.pressKey(k);
+            else console.warn('macro: no key mapping for', ev.keyName);
+          } else {
+            if (k !== null) await keyboard.releaseKey(k);
+          }
+        }
       }
     } catch (err) {
-      // skip failed step, keep macro going
+      // skip failed step
     }
   }
   return true;
 }
 
-async function play(macroEvents, { loop = 1, speed = 1, instant = false } = {}, onDone) {
+async function play(macroEvents, { loop = 1, speed = 1, triggerBinding = null } = {}, onDone) {
   if (playing) stop();
   playing = true;
   const token = ++playToken;
 
-  const scaled = instant || speed === 1 ? macroEvents : macroEvents.map((e) => ({ ...e, t: e.t / speed }));
+  const scaled = speed !== 1 ? macroEvents.map((e) => ({ ...e, t: e.t / speed })) : macroEvents;
   const infinite = !loop || loop <= 0;
   let count = 0;
 
   while (playing && token === playToken && (infinite || count < loop)) {
-    const completed = await playOnce(scaled, token, instant);
+    const completed = await playOnce(scaled, token, triggerBinding);
     if (!completed) break;
     count++;
   }
@@ -156,12 +203,7 @@ function stop() {
   playToken++;
 }
 
-function isPlaying() {
-  return playing;
-}
-
-function isRecording() {
-  return recording;
-}
+function isPlaying() { return playing; }
+function isRecording() { return recording; }
 
 module.exports = { startRecording, stopRecording, isRecording, play, stop, isPlaying };

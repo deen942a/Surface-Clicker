@@ -25,7 +25,11 @@ function ensureStarted() {
 function shutdown() {
   if (!uIOhook || !started) return;
   try {
-    uIOhook.stop();
+    uIOhook.removeAllListeners();
+    // Give the event loop one tick to drain before stopping the native thread
+    setImmediate(() => {
+      try { uIOhook.stop(); } catch (err) { /* ignore */ }
+    });
   } catch (err) {
     console.error('Failed to stop uiohook:', err);
   }

@@ -725,8 +725,6 @@ window.surfaceClicker.onHotkeyDown(() => {
       startClicking();
     }
   } else if (state.mode === 'hold') {
-    // If holdKeyDown is already true but we're not running, a previous
-    // mouseup was dropped — reset and restart cleanly
     if (!state.running) {
       holdKeyDown = true;
       startClicking();
@@ -930,12 +928,12 @@ async function toggleRecording() {
     macroRecordLabel.textContent = 'Stop';
     macroRecordBtn.classList.add('running');
     macroSaveRow.style.display = 'none';
-    await window.surfaceClicker.macroStartRecord();
+    await window.surfaceClicker.macroStartRecord(pendingMacroHotkey, pendingMacroHotkey);
   } else {
     isRecordingMacro = false;
     macroRecordLabel.textContent = 'Record';
     macroRecordBtn.classList.remove('running');
-    pendingMacroEvents = await window.surfaceClicker.macroStopRecord();
+    pendingMacroEvents = await window.surfaceClicker.macroStopRecord(pendingMacroHotkey);
     macroSaveRow.style.display = 'flex';
     macroNameInput.focus();
   }

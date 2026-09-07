@@ -10,7 +10,6 @@ try {
   console.warn('Could not load @nut-tree-fork/nut-js...');
 }
 
-// Map button names to nut-js Button enum values, cached once on load
 const BUTTON_CACHE = {};
 function resolveButton(name) {
   if (BUTTON_CACHE[name] !== undefined) return BUTTON_CACHE[name];
@@ -28,7 +27,6 @@ function resolveButton(name) {
 
 const DUTY_CYCLE_THRESHOLD_CPS = 30;
 const TIGHT_LOOP_THRESHOLD_CPS = 80;
-// Max ms drift before we reset the timing anchor (avoids spiral catch-up)
 const MAX_DRIFT_MS = 200;
 
 let running = false;
@@ -40,13 +38,11 @@ let sessionClicks = 0;
 let sessionStart = 0;
 let appSessionClicks = 0;
 
-// AppLock polling: check at most once per 100 ms instead of per-click
 let appLockAllowed = true;
 let appLockPollTimer = null;
 
 function startAppLockPoll() {
   stopAppLockPoll();
-  // Do an immediate check, then poll every 100 ms
   appLock.isAllowed().then((v) => { appLockAllowed = v; });
   appLockPollTimer = setInterval(() => {
     appLock.isAllowed().then((v) => { appLockAllowed = v; });
@@ -58,7 +54,6 @@ function stopAppLockPoll() {
   appLockAllowed = true;
 }
 
-// Synchronous-ish click — avoids extra promise chains on every tick
 async function doClick(holdMs) {
   if (!mouse) return;
   const btn = resolvedButton;
@@ -73,7 +68,6 @@ async function doClick(holdMs) {
     sessionClicks++;
     appSessionClicks++;
   } catch (err) {
-    // Suppress per-click errors; nut-js can throw if the window focus changes
   }
 }
 
@@ -90,9 +84,6 @@ function scheduleNext(targetTime) {
 
 async function runCycle(targetTime) {
   if (!running) return;
-
-  // Drift guard: if we've fallen too far behind, re-anchor rather than
-  // hammering a burst of missed clicks
   const now = performance.now();
   if (now - targetTime > MAX_DRIFT_MS) targetTime = now;
 
@@ -113,7 +104,6 @@ async function runBurst(targetTime) {
   const cycleMs = 1000 / Math.max(0.1, cfg.cps);
   const now = performance.now();
 
-  // Drift guard for burst path too
   if (now - targetTime > MAX_DRIFT_MS) targetTime = now;
 
   let t = targetTime;
@@ -136,7 +126,7 @@ function start({ cps, dutyCycle, clickButton }, onStatus) {
   if (running) stop();
   running = true;
   cfg = { cps, dutyCycle, clickButton: clickButton || 'left' };
-  resolvedButton = resolveButton(cfg.clickButton); // resolve once, not per-click
+  resolvedButton = resolveButton(cfg.clickButton);
   sessionClicks = 0;
   sessionStart = Date.now();
   startAppLockPoll();

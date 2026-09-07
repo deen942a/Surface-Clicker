@@ -56,7 +56,6 @@ function listOpenWindows() {
 
       const clean = (title) => {90
         let t = title.trim();
-        // If title has a known separator, take the LAST segment (the app name)
         const match = t.match(/^.+[-–|]\s*(.+)$/);
         if (match) return match[1].trim();
         return t;

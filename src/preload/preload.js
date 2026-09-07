@@ -49,8 +49,8 @@ contextBridge.exposeInMainWorld('surfaceClicker', {
   openExternal: (url) => ipcRenderer.invoke('app:openExternal', url),
   getVersion: () => ipcRenderer.invoke('app:getVersion'),
 
-  macroStartRecord: () => ipcRenderer.invoke('macro:startRecord'),
-  macroStopRecord: () => ipcRenderer.invoke('macro:stopRecord'),
+  macroStartRecord: (triggerBinding, stopBinding) => ipcRenderer.invoke('macro:startRecord', triggerBinding, stopBinding),
+  macroStopRecord: (triggerBinding) => ipcRenderer.invoke('macro:stopRecord', triggerBinding),
   macroList: () => ipcRenderer.invoke('macro:list'),
   macroSave: (m) => ipcRenderer.invoke('macro:save', m),
   macroDelete: (id) => ipcRenderer.invoke('macro:delete', id),

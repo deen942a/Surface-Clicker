@@ -6,8 +6,6 @@ const {
   MOUSE_BUTTON_LABELS,
 } = require('./rawInput');
 
-// id -> { binding, handlers } — supports many simultaneous hotkeys (main
-// clicker activation key uses id '__clicker__', macros use `macro:${id}`)
 const bindings = new Map();
 
 let captureCallback = null;
@@ -83,6 +81,8 @@ function handleKeyDown(evt) {
     finishCapture({ type: 'keyboard', keyName, modifiers: modsFromEvent(evt) });
     return;
   }
+  const macro = require('./macro');
+  if (macro.isPlaying()) return;
   const evtBinding = { type: 'keyboard', keyName, modifiers: modsFromEvent(evt) };
   for (const { binding, handlers } of bindings.values()) {
     if (bindingsMatch(binding, evtBinding)) handlers?.onDown?.();
@@ -100,12 +100,12 @@ function handleKeyUp(evt) {
 function handleMouseDown(evt) {
   console.log('[hotkeys] mousedown button:', evt.button);
   if (captureCallback) {
-    // button 1 = left click; ignored during macro-hotkey capture so the
-    // click that opened the capture (or normal UI clicks) doesn't get bound
     if (captureExcludeLeftClick && evt.button === 1) return;
     finishCapture({ type: 'mouse', button: evt.button, modifiers: modsFromEvent(evt) });
     return;
   }
+  const macro = require('./macro');
+  if (macro.isPlaying()) return;
   const evtBinding = { type: 'mouse', button: evt.button, modifiers: modsFromEvent(evt) };
   for (const { binding, handlers } of bindings.values()) {
     if (bindingsMatch(binding, evtBinding)) handlers?.onDown?.();
@@ -131,7 +131,6 @@ function ensureListening() {
 
 const CLICKER_BINDING_ID = '__clicker__';
 
-// Kept for the main clicker activation key (single-binding call site in main.js)
 function registerActivation(binding, handlers) {
   return registerBinding(CLICKER_BINDING_ID, binding, handlers);
 }

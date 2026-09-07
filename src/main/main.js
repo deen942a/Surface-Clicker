@@ -110,9 +110,11 @@ app.on('window-all-closed', () => {
 });
 
 app.on('will-quit', () => {
-  hotkeys.shutdown();
-  clicker.stop();
   macro.stop();
+  clicker.stop();
+  hotkeys.shutdown();          
+  const { shutdown: rawShutdown } = require('./rawInput');
+  rawShutdown();             
   overlay.destroyOverlay();
 });
 
@@ -191,11 +193,13 @@ ipcMain.handle('presets:delete', (_event, id) => store.deletePreset(id));
 
 let currentPlayingMacroId = null;
 
-function playMacroById(id, { loop, speed, instant } = {}) {
+function playMacroById(id, { loop, speed, triggerBinding } = {}) {
   const found = store.getMacros().find((m) => m.id === id);
   if (!found) return false;
   currentPlayingMacroId = id;
-  macro.play(found.events, { loop: loop ?? found.loop ?? 1, speed: speed ?? found.speed ?? 1, instant: !!instant }, () => {
+  const binding = triggerBinding ?? found.hotkey ?? null;
+  console.log('[macro] playing with triggerBinding:', JSON.stringify(binding));
+  macro.play(found.events, { loop: loop ?? found.loop ?? 1, speed: speed ?? found.speed ?? 1, triggerBinding: binding }, () => {
     currentPlayingMacroId = null;
     mainWindow?.webContents.send('macro:playDone');
   });
@@ -208,32 +212,39 @@ function stopMacroPlayback() {
   mainWindow?.webContents.send('macro:playDone');
 }
 
-function registerAllMacroHotkeys() {
-  store.getMacros().forEach((m) => {
-    if (!m.hotkey) return;
-    hotkeys.registerBinding(`macro:${m.id}`, m.hotkey, {
-      onDown: () => {
-        if (macro.isPlaying() && currentPlayingMacroId === m.id) stopMacroPlayback();
-        else playMacroById(m.id, { instant: true });
-      },
-    });
+const macroCooldowns = {};
+
+function registerMacroHotkey(m) {
+  if (!m.hotkey) return;
+  hotkeys.registerBinding(`macro:${m.id}`, m.hotkey, {
+    onDown: () => {
+      const now = Date.now();
+      const last = macroCooldowns[m.id] || 0;
+      if (now - last < 500) return; // ignore re-triggers within 500ms
+      macroCooldowns[m.id] = now;
+      if (macro.isPlaying() && currentPlayingMacroId === m.id) {
+        stopMacroPlayback();
+      } else if (!macro.isPlaying()) {
+        playMacroById(m.id, { triggerBinding: m.hotkey });
+      }
+    },
   });
 }
 
-ipcMain.handle('macro:startRecord', () => { macro.startRecording(); return true; });
-ipcMain.handle('macro:stopRecord', () => macro.stopRecording());
+function registerAllMacroHotkeys() {
+  store.getMacros().forEach((m) => registerMacroHotkey(m));
+}
+
+ipcMain.handle('macro:startRecord', (_event, triggerBinding, stopBinding) => { macro.startRecording(triggerBinding, stopBinding); return true; });
+ipcMain.handle('macro:stopRecord', (_event, triggerBinding) => {
+  const allMacroHotkeys = store.getMacros().map((m) => m.hotkey).filter(Boolean);
+  return macro.stopRecording([triggerBinding, ...allMacroHotkeys].filter(Boolean));
+});
 ipcMain.handle('macro:list', () => store.getMacros());
 ipcMain.handle('macro:save', (_event, m) => {
   const updated = store.saveMacro(m);
   const saved = updated[updated.length - 1];
-  if (saved.hotkey) {
-    hotkeys.registerBinding(`macro:${saved.id}`, saved.hotkey, {
-      onDown: () => {
-        if (macro.isPlaying() && currentPlayingMacroId === saved.id) stopMacroPlayback();
-        else playMacroById(saved.id);
-      },
-    });
-  }
+  registerMacroHotkey(saved);
   return updated;
 });
 ipcMain.handle('macro:delete', (_event, id) => {
@@ -265,13 +276,9 @@ ipcMain.handle('macro:cancelNewHotkeyCapture', () => { hotkeys.cancelCapture(); 
 ipcMain.handle('macro:startHotkeyCapture', (_event, id) => {
   hotkeys.startCapture((binding) => {
     if (!binding) return;
-    store.setMacroHotkey(id, { ...binding, label: hotkeys.bindingLabel(binding) });
-    hotkeys.registerBinding(`macro:${id}`, { ...binding, label: hotkeys.bindingLabel(binding) }, {
-      onDown: () => {
-        if (macro.isPlaying() && currentPlayingMacroId === id) stopMacroPlayback();
-        else playMacroById(id);
-      },
-    });
+    const withLabel = { ...binding, label: hotkeys.bindingLabel(binding) };
+    store.setMacroHotkey(id, withLabel);
+    registerMacroHotkey({ id, hotkey: withLabel });
     mainWindow?.webContents.send('macro:hotkeyCaptured', { id });
   }, { excludeLeftClick: true });
   return true;
