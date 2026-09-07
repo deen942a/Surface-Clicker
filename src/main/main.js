@@ -9,6 +9,7 @@ const hotkeys = require('./hotkeys');
 const edgeStop = require('./edgeStop');
 const appLock = require('./appLock');
 const overlay = require('./overlay');
+const macro = require('./macro');
 
 let mainWindow;
 const appLaunchTime = Date.now();
@@ -55,7 +56,7 @@ function createWindow() {
 
   mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
 
-  // mainWindow.webContents.openDevTools(); 
+  mainWindow.webContents.openDevTools(); 
 }
 
 function applyLoginItemSettings(enabled) {
@@ -83,6 +84,7 @@ app.whenReady().then(() => {
       overlay.getWindow()?.webContents.send('overlay:status', { running: false });
     }
   });
+  registerAllMacroHotkeys();
   edgeStop.setEnabled(store.getSettings().edgeStop);
   applyLoginItemSettings(store.getSettings().launchOnStartup);
   appLock.setEnabled(store.getSettings().appLockEnabled);
@@ -102,6 +104,7 @@ app.on('window-all-closed', () => {
 app.on('will-quit', () => {
   hotkeys.shutdown();
   clicker.stop();
+  macro.stop();
   overlay.destroyOverlay();
 });
 
@@ -177,6 +180,85 @@ ipcMain.handle('presets:list', () => store.getPresets());
 ipcMain.handle('presets:save', (_event, preset) => store.savePreset(preset));
 
 ipcMain.handle('presets:delete', (_event, id) => store.deletePreset(id));
+
+let currentPlayingMacroId = null;
+
+function playMacroById(id, { loop, speed } = {}) {
+  const found = store.getMacros().find((m) => m.id === id);
+  if (!found) return false;
+  currentPlayingMacroId = id;
+  macro.play(found.events, { loop: loop ?? found.loop ?? 1, speed: speed ?? found.speed ?? 1 }, () => {
+    currentPlayingMacroId = null;
+    mainWindow?.webContents.send('macro:playDone');
+  });
+  return true;
+}
+
+function stopMacroPlayback() {
+  macro.stop();
+  currentPlayingMacroId = null;
+  mainWindow?.webContents.send('macro:playDone');
+}
+
+function registerAllMacroHotkeys() {
+  store.getMacros().forEach((m) => {
+    if (!m.hotkey) return;
+    hotkeys.registerBinding(`macro:${m.id}`, m.hotkey, {
+      onDown: () => {
+        if (macro.isPlaying() && currentPlayingMacroId === m.id) stopMacroPlayback();
+        else playMacroById(m.id);
+      },
+    });
+  });
+}
+
+ipcMain.handle('macro:startRecord', () => { macro.startRecording(); return true; });
+ipcMain.handle('macro:stopRecord', () => macro.stopRecording());
+ipcMain.handle('macro:list', () => store.getMacros());
+ipcMain.handle('macro:save', (_event, m) => {
+  const updated = store.saveMacro(m);
+  const saved = updated[updated.length - 1];
+  if (saved.hotkey) {
+    hotkeys.registerBinding(`macro:${saved.id}`, saved.hotkey, {
+      onDown: () => {
+        if (macro.isPlaying() && currentPlayingMacroId === saved.id) stopMacroPlayback();
+        else playMacroById(saved.id);
+      },
+    });
+  }
+  return updated;
+});
+ipcMain.handle('macro:delete', (_event, id) => {
+  hotkeys.unregisterBinding(`macro:${id}`);
+  return store.deleteMacro(id);
+});
+ipcMain.handle('macro:play', (_event, { id, loop, speed }) => playMacroById(id, { loop, speed }));
+ipcMain.handle('macro:stopPlay', () => { stopMacroPlayback(); return true; });
+
+ipcMain.handle('macro:captureNewHotkey', () => {
+  hotkeys.startCapture((binding) => {
+    if (!binding) return;
+    mainWindow?.webContents.send('macro:newHotkeyCaptured', { ...binding, label: hotkeys.bindingLabel(binding) });
+  }, { excludeLeftClick: true });
+  return true;
+});
+ipcMain.handle('macro:cancelNewHotkeyCapture', () => { hotkeys.cancelCapture(); return true; });
+
+ipcMain.handle('macro:startHotkeyCapture', (_event, id) => {
+  hotkeys.startCapture((binding) => {
+    if (!binding) return;
+    store.setMacroHotkey(id, { ...binding, label: hotkeys.bindingLabel(binding) });
+    hotkeys.registerBinding(`macro:${id}`, { ...binding, label: hotkeys.bindingLabel(binding) }, {
+      onDown: () => {
+        if (macro.isPlaying() && currentPlayingMacroId === id) stopMacroPlayback();
+        else playMacroById(id);
+      },
+    });
+    mainWindow?.webContents.send('macro:hotkeyCaptured', { id });
+  }, { excludeLeftClick: true });
+  return true;
+});
+ipcMain.handle('macro:cancelHotkeyCapture', () => { hotkeys.cancelCapture(); return true; });
 
 
 let currentSessionMeta = { mode: null, presetName: null };

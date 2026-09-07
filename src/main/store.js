@@ -22,6 +22,7 @@ const store = new Store({
       statsEnabled: true,
     },
     presets: [],
+    macros: [],
     stats: {
       allTimeClicks: 0,
       totalTimeRunning: 0,
@@ -68,6 +69,38 @@ function deletePreset(id) {
   return updated;
 }
 
+function getMacros() {
+  return store.get('macros');
+}
+
+function saveMacro({ name, events, loop, speed, hotkey }) {
+  const macros = store.get('macros');
+  const macro = {
+    id: Date.now().toString(36),
+    name: name?.trim() || 'untitled',
+    events: events || [],
+    loop: loop ?? 1,
+    speed: speed ?? 1,
+    hotkey: hotkey || null,
+  };
+  const updated = [...macros, macro];
+  store.set('macros', updated);
+  return updated;
+}
+
+function setMacroHotkey(id, hotkey) {
+  const macros = store.get('macros');
+  const updated = macros.map((m) => (m.id === id ? { ...m, hotkey } : m));
+  store.set('macros', updated);
+  return updated;
+}
+
+function deleteMacro(id) {
+  const macros = store.get('macros');
+  const updated = macros.filter((m) => m.id !== id);
+  store.set('macros', updated);
+  return updated;
+}
 function getStats() {
   return store.get('stats');
 }
@@ -94,4 +127,4 @@ function recordSession({ clicks, durationMs, mode, presetName }) {
   return stats;
 }
 
-module.exports = { getSettings, setSettings, getPresets, savePreset, deletePreset, getStats, recordSession };
+module.exports = { getSettings, setSettings, getPresets, savePreset, deletePreset, getMacros, saveMacro, deleteMacro, setMacroHotkey, getStats, recordSession };

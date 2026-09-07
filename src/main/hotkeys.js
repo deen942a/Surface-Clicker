@@ -6,11 +6,13 @@ const {
   MOUSE_BUTTON_LABELS,
 } = require('./rawInput');
 
-let activeBinding = null;
-let activeHandlers = null;
+// id -> { binding, handlers } — supports many simultaneous hotkeys (main
+// clicker activation key uses id '__clicker__', macros use `macro:${id}`)
+const bindings = new Map();
 
 let captureCallback = null;
 let captureTimeout = null;
+let captureExcludeLeftClick = false;
 
 let listening = false;
 
@@ -66,6 +68,7 @@ function bindingsMatch(a, b) {
 function finishCapture(binding) {
   const cb = captureCallback;
   captureCallback = null;
+  captureExcludeLeftClick = false;
   if (captureTimeout) {
     clearTimeout(captureTimeout);
     captureTimeout = null;
@@ -76,44 +79,43 @@ function finishCapture(binding) {
 function handleKeyDown(evt) {
   const keyName = KEY_NAME_BY_CODE[evt.keycode] || `Key${evt.keycode}`;
   if (captureCallback) {
-    if (isModifierKey(keyName)) return; 
+    if (isModifierKey(keyName)) return;
     finishCapture({ type: 'keyboard', keyName, modifiers: modsFromEvent(evt) });
     return;
   }
-  if (bindingsMatch(activeBinding, { type: 'keyboard', keyName, modifiers: modsFromEvent(evt) })) {
-    activeHandlers?.onDown?.();
+  const evtBinding = { type: 'keyboard', keyName, modifiers: modsFromEvent(evt) };
+  for (const { binding, handlers } of bindings.values()) {
+    if (bindingsMatch(binding, evtBinding)) handlers?.onDown?.();
   }
 }
 
 function handleKeyUp(evt) {
+  if (captureCallback) return;
   const keyName = KEY_NAME_BY_CODE[evt.keycode] || `Key${evt.keycode}`;
-  if (
-    activeBinding?.type === 'keyboard' &&
-    activeBinding.keyName === keyName &&
-    !captureCallback
-  ) {
-    activeHandlers?.onUp?.();
+  for (const { binding, handlers } of bindings.values()) {
+    if (binding?.type === 'keyboard' && binding.keyName === keyName) handlers?.onUp?.();
   }
 }
 
 function handleMouseDown(evt) {
+  console.log('[hotkeys] mousedown button:', evt.button);
   if (captureCallback) {
+    // button 1 = left click; ignored during macro-hotkey capture so the
+    // click that opened the capture (or normal UI clicks) doesn't get bound
+    if (captureExcludeLeftClick && evt.button === 1) return;
     finishCapture({ type: 'mouse', button: evt.button, modifiers: modsFromEvent(evt) });
     return;
   }
-  if (bindingsMatch(activeBinding, { type: 'mouse', button: evt.button, modifiers: modsFromEvent(evt) })) {
-    activeHandlers?.onDown?.();
+  const evtBinding = { type: 'mouse', button: evt.button, modifiers: modsFromEvent(evt) };
+  for (const { binding, handlers } of bindings.values()) {
+    if (bindingsMatch(binding, evtBinding)) handlers?.onDown?.();
   }
 }
 
 function handleMouseUp(evt) {
-  // Guard type too — avoids phantom onUp when capture just consumed a mousedown
-  if (
-    activeBinding?.type === 'mouse' &&
-    activeBinding.button === evt.button &&
-    !captureCallback
-  ) {
-    activeHandlers?.onUp?.();
+  if (captureCallback) return;
+  for (const { binding, handlers } of bindings.values()) {
+    if (binding?.type === 'mouse' && binding.button === evt.button) handlers?.onUp?.();
   }
 }
 
@@ -127,32 +129,45 @@ function ensureListening() {
   listening = true;
 }
 
+const CLICKER_BINDING_ID = '__clicker__';
+
+// Kept for the main clicker activation key (single-binding call site in main.js)
 function registerActivation(binding, handlers) {
+  return registerBinding(CLICKER_BINDING_ID, binding, handlers);
+}
+
+function registerBinding(id, binding, handlers) {
   ensureListening();
-  activeBinding = binding || null;
-  activeHandlers = handlers || null;
+  if (binding) bindings.set(id, { binding, handlers });
+  else bindings.delete(id);
   return isAvailable;
 }
 
-function unregisterAll() {
-  activeBinding = null;
-  activeHandlers = null;
+function unregisterBinding(id) {
+  bindings.delete(id);
 }
 
-function startCapture(onCaptured) {
+function unregisterAll() {
+  bindings.clear();
+}
+
+function startCapture(onCaptured, { excludeLeftClick = false } = {}) {
   ensureListening();
   if (!isAvailable) {
     onCaptured?.(null);
     return;
   }
   captureCallback = onCaptured;
+  captureExcludeLeftClick = excludeLeftClick;
   captureTimeout = setTimeout(() => {
     captureCallback = null;
+    captureExcludeLeftClick = false;
   }, 15000);
 }
 
 function cancelCapture() {
   captureCallback = null;
+  captureExcludeLeftClick = false;
   if (captureTimeout) {
     clearTimeout(captureTimeout);
     captureTimeout = null;
@@ -166,6 +181,8 @@ function shutdown() {
 
 module.exports = {
   registerActivation,
+  registerBinding,
+  unregisterBinding,
   unregisterAll,
   startCapture,
   cancelCapture,
