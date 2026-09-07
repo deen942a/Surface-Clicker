@@ -341,11 +341,11 @@
     <header class="main-header">
       <span class="page-title">Macros</span>
       <div style="display:flex;gap:8px;align-items:center;">
-        <button class="btn-ghost" id="macro-set-hotkey-btn">
+        <button class="btn-ghost" id="macro-set-record-hotkey-btn">
           <i class="ti ti-keyboard"></i>
-          <span id="macro-hotkey-label">Set Hotkey</span>
+          <span id="macro-record-hotkey-label">Record Hotkey</span>
         </button>
-        <button class="btn btn-primary" id="macro-record-btn" disabled>
+        <button class="btn btn-primary" id="macro-record-btn">
           <i class="ti ti-player-record"></i>
           <span id="macro-record-label">Record</span>
         </button>
@@ -358,6 +358,10 @@
       <div class="setting-row-sub">loops (0 = infinite)</div>
       <input type="range" id="macro-speed" min="0.25" max="4" step="0.25" value="1" style="flex:1;margin-left:14px;" />
       <span id="macro-speed-val" style="width:38px;flex-shrink:0;font-size:12px;">1x</span>
+      <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:rgba(255,255,255,0.5);margin-left:14px;white-space:nowrap;">
+        <input type="checkbox" id="macro-instant" style="width:14px;height:14px;" />
+        Instant
+      </label>
     </div>
 
     <div class="section-label">Saved Macros</div>
@@ -371,6 +375,10 @@
 
     <div class="preset-save-row" id="macro-save-row" style="display:none;">
       <input type="text" id="macro-name" placeholder="Name this macro…" />
+      <button class="btn-ghost" id="macro-set-hotkey-btn">
+        <i class="ti ti-keyboard"></i>
+        <span id="macro-hotkey-label">Set Hotkey</span>
+      </button>
       <button class="btn btn-primary" id="macro-save-btn"><i class="ti ti-device-floppy"></i> Save</button>
       <button class="btn btn-danger" id="macro-discard-btn">Discard</button>
     </div>

@@ -160,8 +160,10 @@ function startCapture(onCaptured, { excludeLeftClick = false } = {}) {
   captureCallback = onCaptured;
   captureExcludeLeftClick = excludeLeftClick;
   captureTimeout = setTimeout(() => {
+    const cb = captureCallback;
     captureCallback = null;
     captureExcludeLeftClick = false;
+    cb?.(null);
   }, 15000);
 }
 

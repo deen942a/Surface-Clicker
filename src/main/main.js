@@ -71,9 +71,17 @@ function registerCurrentBinding() {
   });
 }
 
+function registerRecordHotkeyBinding() {
+  const { recordHotkey } = store.getSettings();
+  hotkeys.registerBinding('__macroRecord__', recordHotkey, {
+    onDown: () => mainWindow?.webContents.send('macro:recordHotkeyTriggered'),
+  });
+}
+
 app.whenReady().then(() => {
   createWindow();
   registerCurrentBinding();
+  registerRecordHotkeyBinding();
   edgeStop.init(() => {
     if (clicker.isRunning()) {
       clicker.stop((status) => {
@@ -183,11 +191,11 @@ ipcMain.handle('presets:delete', (_event, id) => store.deletePreset(id));
 
 let currentPlayingMacroId = null;
 
-function playMacroById(id, { loop, speed } = {}) {
+function playMacroById(id, { loop, speed, instant } = {}) {
   const found = store.getMacros().find((m) => m.id === id);
   if (!found) return false;
   currentPlayingMacroId = id;
-  macro.play(found.events, { loop: loop ?? found.loop ?? 1, speed: speed ?? found.speed ?? 1 }, () => {
+  macro.play(found.events, { loop: loop ?? found.loop ?? 1, speed: speed ?? found.speed ?? 1, instant: !!instant }, () => {
     currentPlayingMacroId = null;
     mainWindow?.webContents.send('macro:playDone');
   });
@@ -206,7 +214,7 @@ function registerAllMacroHotkeys() {
     hotkeys.registerBinding(`macro:${m.id}`, m.hotkey, {
       onDown: () => {
         if (macro.isPlaying() && currentPlayingMacroId === m.id) stopMacroPlayback();
-        else playMacroById(m.id);
+        else playMacroById(m.id, { instant: true });
       },
     });
   });
@@ -232,13 +240,23 @@ ipcMain.handle('macro:delete', (_event, id) => {
   hotkeys.unregisterBinding(`macro:${id}`);
   return store.deleteMacro(id);
 });
-ipcMain.handle('macro:play', (_event, { id, loop, speed }) => playMacroById(id, { loop, speed }));
+ipcMain.handle('macro:play', (_event, { id, loop, speed, instant }) => playMacroById(id, { loop, speed, instant }));
 ipcMain.handle('macro:stopPlay', () => { stopMacroPlayback(); return true; });
+
+ipcMain.handle('macro:startRecordHotkeyCapture', () => {
+  hotkeys.startCapture((binding) => {
+    const withLabel = binding ? { ...binding, label: hotkeys.bindingLabel(binding) } : null;
+    store.setSettings({ recordHotkey: withLabel });
+    registerRecordHotkeyBinding();
+    mainWindow?.webContents.send('macro:recordHotkeySet', withLabel);
+  }, { excludeLeftClick: true });
+  return true;
+});
+ipcMain.handle('macro:cancelRecordHotkeyCapture', () => { hotkeys.cancelCapture(); return true; });
 
 ipcMain.handle('macro:captureNewHotkey', () => {
   hotkeys.startCapture((binding) => {
-    if (!binding) return;
-    mainWindow?.webContents.send('macro:newHotkeyCaptured', { ...binding, label: hotkeys.bindingLabel(binding) });
+    mainWindow?.webContents.send('macro:newHotkeyCaptured', binding ? { ...binding, label: hotkeys.bindingLabel(binding) } : null);
   }, { excludeLeftClick: true });
   return true;
 });

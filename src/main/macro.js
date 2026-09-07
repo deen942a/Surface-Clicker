@@ -13,6 +13,18 @@ let recording = false;
 let recordStart = 0;
 let events = [];
 let listenersAttached = false;
+let recordHotkeyBinding = null;
+
+function setRecordHotkeyBinding(binding) {
+  recordHotkeyBinding = binding || null;
+}
+
+function isRecordHotkeyMatch(kind, data) {
+  if (!recordHotkeyBinding) return false;
+  if (recordHotkeyBinding.type === 'keyboard' && kind === 'key') return data.keyName === recordHotkeyBinding.keyName;
+  if (recordHotkeyBinding.type === 'mouse' && kind === 'mouse') return data.button === recordHotkeyBinding.button;
+  return false;
+}
 
 const MOVE_INTERVAL_MS = 16; // throttle mousemove to ~60fps to keep files small
 let lastMoveRecorded = 0;
@@ -55,7 +67,13 @@ function stopRecording() {
   return events;
 }
 
-const MOUSE_BTN_MAP = { 1: () => Button.LEFT, 2: () => Button.RIGHT, 3: () => Button.MIDDLE };
+const MOUSE_BTN_MAP = {
+  1: () => Button.LEFT,
+  2: () => Button.RIGHT,
+  3: () => Button.MIDDLE,
+  4: () => Button.BUTTON_4,
+  5: () => Button.BUTTON_5,
+};
 
 // Best-effort uiohook keyName -> nut-js Key resolution. Reliable for letters/
 // digits/F-keys; special keys fall back to a small alias table and otherwise
@@ -113,17 +131,17 @@ async function playOnce(macroEvents, token) {
   return true;
 }
 
-async function play(macroEvents, { loop = 1, speed = 1 } = {}, onDone) {
+async function play(macroEvents, { loop = 1, speed = 1, instant = false } = {}, onDone) {
   if (playing) stop();
   playing = true;
   const token = ++playToken;
 
-  const scaled = speed !== 1 ? macroEvents.map((e) => ({ ...e, t: e.t / speed })) : macroEvents;
+  const scaled = instant || speed === 1 ? macroEvents : macroEvents.map((e) => ({ ...e, t: e.t / speed }));
   const infinite = !loop || loop <= 0;
   let count = 0;
 
   while (playing && token === playToken && (infinite || count < loop)) {
-    const completed = await playOnce(scaled, token);
+    const completed = await playOnce(scaled, token, instant);
     if (!completed) break;
     count++;
   }

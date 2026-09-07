@@ -20,6 +20,7 @@ const store = new Store({
       soundEnabled: true,
       startupSoundEnabled: true,
       statsEnabled: true,
+      recordHotkey: null,
     },
     presets: [],
     macros: [],

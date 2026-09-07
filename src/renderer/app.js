@@ -801,6 +801,7 @@ async function init() {
 
   const macros = await window.surfaceClicker.macroList();
   renderMacros(macros);
+  if (state.recordHotkey) macroRecordHotkeyLabel.textContent = state.recordHotkey.label;
 
   const stats = await window.surfaceClicker.getStats();
   renderLifetimeStats(stats);
@@ -907,7 +908,6 @@ macroSpeedSlider.addEventListener('input', () => {
 function resetHotkeyStep() {
   pendingMacroHotkey = null;
   macroHotkeyLabel.textContent = 'Set Hotkey';
-  macroRecordBtn.disabled = true;
 }
 
 macroSetHotkeyBtn.addEventListener('click', async () => {
@@ -916,13 +916,15 @@ macroSetHotkeyBtn.addEventListener('click', async () => {
 });
 
 window.surfaceClicker.onNewMacroHotkeyCaptured((binding) => {
+  if (!binding) {
+    macroHotkeyLabel.textContent = 'Set Hotkey';
+    return;
+  }
   pendingMacroHotkey = binding;
   macroHotkeyLabel.textContent = binding.label;
-  macroRecordBtn.disabled = false;
 });
 
-macroRecordBtn.addEventListener('click', async () => {
-  if (macroRecordBtn.disabled) return;
+async function toggleRecording() {
   if (!isRecordingMacro) {
     isRecordingMacro = true;
     macroRecordLabel.textContent = 'Stop';
@@ -937,7 +939,23 @@ macroRecordBtn.addEventListener('click', async () => {
     macroSaveRow.style.display = 'flex';
     macroNameInput.focus();
   }
+}
+
+macroRecordBtn.addEventListener('click', toggleRecording);
+
+const macroSetRecordHotkeyBtn = document.getElementById('macro-set-record-hotkey-btn');
+const macroRecordHotkeyLabel = document.getElementById('macro-record-hotkey-label');
+
+macroSetRecordHotkeyBtn.addEventListener('click', async () => {
+  macroRecordHotkeyLabel.textContent = 'Press key/button…';
+  await window.surfaceClicker.macroSetRecordHotkey();
 });
+
+window.surfaceClicker.onMacroRecordHotkeySet((binding) => {
+  macroRecordHotkeyLabel.textContent = binding ? binding.label : 'Record Hotkey';
+});
+
+window.surfaceClicker.onMacroRecordHotkeyTriggered(toggleRecording);
 
 macroDiscardBtn.addEventListener('click', () => {
   pendingMacroEvents = null;
@@ -995,8 +1013,9 @@ function renderMacros(macros) {
       }
       const loop = parseInt(macroLoopInput.value, 10) || 0;
       const speed = parseFloat(macroSpeedSlider.value) || 1;
+      const instant = document.getElementById('macro-instant')?.checked || false;
       playBtn.textContent = 'Stop';
-      await window.surfaceClicker.macroPlay({ id: macro.id, loop, speed });
+      await window.surfaceClicker.macroPlay({ id: macro.id, loop, speed, instant });
     });
     item.querySelector('.preset-delete-btn').addEventListener('click', async () => {
       const updated = await window.surfaceClicker.macroDelete(macro.id);

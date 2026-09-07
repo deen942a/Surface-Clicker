@@ -63,6 +63,10 @@ contextBridge.exposeInMainWorld('surfaceClicker', {
   onMacroHotkeyCaptured: (callback) => { ipcRenderer.on('macro:hotkeyCaptured', (_e, data) => callback(data)); },
 
   macroCaptureNewHotkey: () => ipcRenderer.invoke('macro:captureNewHotkey'),
+  macroSetRecordHotkey: () => ipcRenderer.invoke('macro:startRecordHotkeyCapture'),
+  macroCancelRecordHotkeyCapture: () => ipcRenderer.invoke('macro:cancelRecordHotkeyCapture'),
+  onMacroRecordHotkeySet: (callback) => ipcRenderer.on('macro:recordHotkeySet', (_e, binding) => callback(binding)),
+  onMacroRecordHotkeyTriggered: (callback) => ipcRenderer.on('macro:recordHotkeyTriggered', () => callback()),
   macroCancelNewHotkeyCapture: () => ipcRenderer.invoke('macro:cancelNewHotkeyCapture'),
   onNewMacroHotkeyCaptured: (callback) => { ipcRenderer.on('macro:newHotkeyCaptured', (_e, binding) => callback(binding)); },
   }
