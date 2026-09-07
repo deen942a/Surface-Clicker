@@ -984,12 +984,13 @@ function renderMacros(macros) {
 
   macros.forEach((macro) => {
     const durationMs = macro.events.length ? macro.events[macro.events.length - 1].t : 0;
+    const actionCount = Math.max(0, macro.events.length - 1);
     const item = document.createElement('div');
     item.className = 'preset-item';
     item.innerHTML = `
       <div class="preset-item-info">
         <div class="name">${escapeHtml(macro.name)}</div>
-        <div class="details">${macro.events.length} events · ${(durationMs / 1000).toFixed(1)}s</div>
+        <div class="details">${actionCount} events · ${(durationMs / 1000).toFixed(1)}s</div>
       </div>
       <div style="display:flex;align-items:center;gap:5px;flex-shrink:0;margin-left:10px;">
         <button class="preset-equip-btn macro-hotkey-btn" title="Set hotkey (any key, or mouse button other than left-click)" style="width:auto;min-width:60px;padding:0 8px;">${escapeHtml(macro.hotkey?.label || 'Hotkey')}</button>

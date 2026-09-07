@@ -56,6 +56,12 @@ function createWindow() {
 
   mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
 
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (input.type === 'keyDown' && (input.key === 'F5' || (input.control && input.key.toLowerCase() === 'r'))) {
+      event.preventDefault();
+    }
+  });
+
   mainWindow.webContents.openDevTools(); 
 }
 
@@ -235,10 +241,13 @@ function registerAllMacroHotkeys() {
   store.getMacros().forEach((m) => registerMacroHotkey(m));
 }
 
-ipcMain.handle('macro:startRecord', (_event, triggerBinding, stopBinding) => { macro.startRecording(triggerBinding, stopBinding); return true; });
-ipcMain.handle('macro:stopRecord', (_event, triggerBinding) => {
-  const allMacroHotkeys = store.getMacros().map((m) => m.hotkey).filter(Boolean);
-  return macro.stopRecording([triggerBinding, ...allMacroHotkeys].filter(Boolean));
+ipcMain.handle('macro:startRecord', (_event, triggerBinding) => {
+  const { recordHotkey } = store.getSettings();
+  macro.startRecording(triggerBinding, recordHotkey);
+  return true;
+});
+ipcMain.handle('macro:stopRecord', () => {
+  return macro.stopRecording();
 });
 ipcMain.handle('macro:list', () => store.getMacros());
 ipcMain.handle('macro:save', (_event, m) => {

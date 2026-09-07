@@ -25,6 +25,7 @@ let _onMouseDown = null;
 let _onMouseUp = null;
 let _onKeyDown = null;
 let _onKeyUp = null;
+let _onWheel = null;
 
 function detachRecordListeners() {
   if (!uIOhook) return;
@@ -33,7 +34,8 @@ function detachRecordListeners() {
   if (_onMouseUp) uIOhook.off('mouseup', _onMouseUp);
   if (_onKeyDown) uIOhook.off('keydown', _onKeyDown);
   if (_onKeyUp) uIOhook.off('keyup', _onKeyUp);
-  _onMove = _onMouseDown = _onMouseUp = _onKeyDown = _onKeyUp = null;
+  if (_onWheel) uIOhook.off('wheel', _onWheel);
+  _onMove = _onMouseDown = _onMouseUp = _onKeyDown = _onKeyUp = _onWheel = null;
 }
 
 function attachRecordListeners() {
@@ -79,11 +81,22 @@ function attachRecordListeners() {
     events.push({ t: performance.now() - recordStart, type: 'keyup', keyName });
   };
 
+  _onWheel = (e) => {
+    if (!recording) return;
+    events.push({
+      t: performance.now() - recordStart,
+      type: 'wheel',
+      rotation: e.rotation,
+      direction: e.direction,
+    });
+  };
+
   uIOhook.on('mousemove', _onMove);
   uIOhook.on('mousedown', _onMouseDown);
   uIOhook.on('mouseup', _onMouseUp);
   uIOhook.on('keydown', _onKeyDown);
   uIOhook.on('keyup', _onKeyUp);
+  uIOhook.on('wheel', _onWheel);
 }
 
 function startRecording(triggerBinding, stopBinding) {
@@ -97,21 +110,13 @@ function startRecording(triggerBinding, stopBinding) {
   recording = true;
 }
 
-function stopRecording(allHotkeys) {
+function stopRecording() {
   recording = false;
   detachRecordListeners();
-  const allBlocked = [...blockedBindings, ...(allHotkeys || [])].filter(Boolean);
-  const cleaned = events.filter((ev) => {
-    if (ev.type === 'mousedown' || ev.type === 'mouseup') {
-      return !allBlocked.some((b) => b.type === 'mouse' && b.button === ev.button);
-    }
-    if (ev.type === 'keydown' || ev.type === 'keyup') {
-      return !allBlocked.some((b) => b.type === 'keyboard' && b.keyName === ev.keyName);
-    }
-    return true;
-  });
+  events.push({ t: performance.now() - recordStart, type: 'end' });
+  const result = events;
   blockedBindings = [];
-  return cleaned;
+  return result;
 }
 
 const MOUSE_BTN_MAP = { 1: () => Button.LEFT, 2: () => Button.RIGHT, 3: () => Button.MIDDLE };
