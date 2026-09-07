@@ -60,8 +60,6 @@ function attachRecordListeners() {
 
   _onMouseUp = (e) => {
     if (!recording) return;
-    if (recordingTriggerBinding?.type === 'mouse' && recordingTriggerBinding.button === e.button) { recording = false; return; }
-    if (recordingStopBinding?.type === 'mouse' && recordingStopBinding.button === e.button) { recording = false; return; }
     events.push({ t: performance.now() - recordStart, type: 'mouseup', button: e.button });
   };
 
@@ -76,8 +74,6 @@ function attachRecordListeners() {
   _onKeyUp = (e) => {
     if (!recording) return;
     const keyName = KEY_NAME_BY_CODE[e.keycode];
-    if (recordingTriggerBinding?.type === 'keyboard' && recordingTriggerBinding.keyName === keyName) { recording = false; return; }
-    if (recordingStopBinding?.type === 'keyboard' && recordingStopBinding.keyName === keyName) { recording = false; return; }
     events.push({ t: performance.now() - recordStart, type: 'keyup', keyName });
   };
 
@@ -145,17 +141,50 @@ function sleep(ms) {
 
 async function playOnce(macroEvents, token, triggerBinding) {
   let last = 0;
+  let lastX = null;
+  let lastY = null;
+  const MOVE_STEP_MS = 8;
+
   for (const ev of macroEvents) {
     if (token !== playToken) return false;
     const wait = ev.t - last;
-    if (wait > 0) await sleep(wait);
     last = ev.t;
+
+    if (ev.type === 'move' && mouse && Point) {
+      if (wait > 0 && lastX !== null && lastY !== null) {
+        const steps = Math.min(12, Math.max(1, Math.round(wait / MOVE_STEP_MS)));
+        const stepWait = wait / steps;
+        for (let i = 1; i <= steps; i++) {
+          if (token !== playToken) return false;
+          await sleep(stepWait);
+          const frac = i / steps;
+          try {
+            await mouse.setPosition(new Point(
+              Math.round(lastX + (ev.x - lastX) * frac),
+              Math.round(lastY + (ev.y - lastY) * frac)
+            ));
+          } catch (err) {
+            // skip failed step
+          }
+        }
+      } else {
+        if (wait > 0) await sleep(wait);
+        try {
+          await mouse.setPosition(new Point(ev.x, ev.y));
+        } catch (err) {
+          // skip failed step
+        }
+      }
+      lastX = ev.x;
+      lastY = ev.y;
+      continue;
+    }
+
+    if (wait > 0) await sleep(wait);
     if (token !== playToken) return false;
 
     try {
-      if (ev.type === 'move' && mouse && Point) {
-        await mouse.setPosition(new Point(ev.x, ev.y));
-      } else if ((ev.type === 'mousedown' || ev.type === 'mouseup') && mouse) {
+      if ((ev.type === 'mousedown' || ev.type === 'mouseup') && mouse) {
         if (triggerBinding?.type === 'mouse' && triggerBinding.button === ev.button) {
           // skip trigger button
         } else if (ev.type === 'mousedown') {
@@ -174,6 +203,16 @@ async function playOnce(macroEvents, token, triggerBinding) {
           } else {
             if (k !== null) await keyboard.releaseKey(k);
           }
+        }
+      } else if (ev.type === 'wheel' && mouse) {
+        const amount = Math.max(1, Math.abs(Math.round(ev.rotation || 1)));
+        const horizontal = ev.direction === 4;
+        if (horizontal) {
+          if (ev.rotation < 0) await mouse.scrollLeft(amount);
+          else await mouse.scrollRight(amount);
+        } else {
+          if (ev.rotation < 0) await mouse.scrollUp(amount);
+          else await mouse.scrollDown(amount);
         }
       }
     } catch (err) {
