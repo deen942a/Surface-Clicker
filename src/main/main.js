@@ -62,7 +62,7 @@ function createWindow() {
     }
   });
 
-  mainWindow.webContents.openDevTools(); 
+  // mainWindow.webContents.openDevTools(); 
 }
 
 function applyLoginItemSettings(enabled) {
@@ -199,13 +199,13 @@ ipcMain.handle('presets:delete', (_event, id) => store.deletePreset(id));
 
 let currentPlayingMacroId = null;
 
-function playMacroById(id, { loop, speed, triggerBinding } = {}) {
+function playMacroById(id, { loop, speed, instant = false, triggerBinding } = {}) {
   const found = store.getMacros().find((m) => m.id === id);
   if (!found) return false;
   currentPlayingMacroId = id;
   const binding = triggerBinding ?? found.hotkey ?? null;
   console.log('[macro] playing with triggerBinding:', JSON.stringify(binding));
-  macro.play(found.events, { loop: loop ?? found.loop ?? 1, speed: speed ?? found.speed ?? 1, triggerBinding: binding }, () => {
+  macro.play(found.events, { loop: loop ?? found.loop ?? 1, speed: speed ?? found.speed ?? 1, instant, triggerBinding: binding }, () => {
     currentPlayingMacroId = null;
     mainWindow?.webContents.send('macro:playDone');
   });

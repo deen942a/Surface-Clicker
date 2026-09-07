@@ -98,7 +98,7 @@ function handleKeyUp(evt) {
 }
 
 function handleMouseDown(evt) {
-  console.log('[hotkeys] mousedown button:', evt.button);
+  // console.log('[hotkeys] mousedown button:', evt.button);
   if (captureCallback) {
     if (captureExcludeLeftClick && evt.button === 1) return;
     finishCapture({ type: 'mouse', button: evt.button, modifiers: modsFromEvent(evt) });

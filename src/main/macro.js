@@ -143,37 +143,18 @@ async function playOnce(macroEvents, token, triggerBinding) {
   let last = 0;
   let lastX = null;
   let lastY = null;
-  const MOVE_STEP_MS = 8;
 
   for (const ev of macroEvents) {
     if (token !== playToken) return false;
     const wait = ev.t - last;
     last = ev.t;
-
     if (ev.type === 'move' && mouse && Point) {
-      if (wait > 0 && lastX !== null && lastY !== null) {
-        const steps = Math.min(12, Math.max(1, Math.round(wait / MOVE_STEP_MS)));
-        const stepWait = wait / steps;
-        for (let i = 1; i <= steps; i++) {
-          if (token !== playToken) return false;
-          await sleep(stepWait);
-          const frac = i / steps;
-          try {
-            await mouse.setPosition(new Point(
-              Math.round(lastX + (ev.x - lastX) * frac),
-              Math.round(lastY + (ev.y - lastY) * frac)
-            ));
-          } catch (err) {
-            // skip failed step
-          }
-        }
-      } else {
-        if (wait > 0) await sleep(wait);
-        try {
-          await mouse.setPosition(new Point(ev.x, ev.y));
-        } catch (err) {
-          // skip failed step
-        }
+      if (wait > 0) await sleep(wait);
+      if (token !== playToken) return false;
+      try {
+        await mouse.setPosition(new Point(ev.x, ev.y));
+      } catch (err) {
+        // skip failed step
       }
       lastX = ev.x;
       lastY = ev.y;
@@ -222,12 +203,20 @@ async function playOnce(macroEvents, token, triggerBinding) {
   return true;
 }
 
-async function play(macroEvents, { loop = 1, speed = 1, triggerBinding = null } = {}, onDone) {
+async function play(macroEvents, { loop = 1, speed = 1, instant = false, triggerBinding = null } = {}, onDone) {
   if (playing) stop();
   playing = true;
   const token = ++playToken;
 
-  const scaled = speed !== 1 ? macroEvents.map((e) => ({ ...e, t: e.t / speed })) : macroEvents;
+  let scaled;
+  if (instant) {
+    scaled = macroEvents.map((e) => ({ ...e, t: 0 }));
+  } else if (speed !== 1) {
+    scaled = macroEvents.map((e) => ({ ...e, t: e.t / speed }));
+  } else {
+    scaled = macroEvents;
+  }
+
   const infinite = !loop || loop <= 0;
   let count = 0;
 
