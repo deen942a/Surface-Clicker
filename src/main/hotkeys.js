@@ -11,6 +11,7 @@ const bindings = new Map();
 let captureCallback = null;
 let captureTimeout = null;
 let captureExcludeLeftClick = false;
+let captureExcludeEscape = false;
 
 let listening = false;
 
@@ -76,14 +77,17 @@ function handleKeyDown(evt) {
   const keyName = KEY_NAME_BY_CODE[evt.keycode] || `Key${evt.keycode}`;
   if (captureCallback) {
     if (isModifierKey(keyName)) return;
+    if (captureExcludeEscape && keyName === 'Escape') return;
     finishCapture({ type: 'keyboard', keyName, modifiers: modsFromEvent(evt) });
     return;
   }
   const macro = require('./macro');
-  if (macro.isPlaying()) return;
   const evtBinding = { type: 'keyboard', keyName, modifiers: modsFromEvent(evt) };
-  for (const { binding, handlers } of bindings.values()) {
-    if (bindingsMatch(binding, evtBinding)) handlers?.onDown?.();
+  for (const [id, { binding, handlers }] of bindings.entries()) {
+    if (bindingsMatch(binding, evtBinding)) {
+      if (macro.isPlaying() && !id.startsWith('macro:')) continue;
+      handlers?.onDown?.();
+    }
   }
 }
 
@@ -148,7 +152,7 @@ function unregisterAll() {
   bindings.clear();
 }
 
-function startCapture(onCaptured, { excludeLeftClick = false } = {}) {
+function startCapture(onCaptured, { excludeLeftClick = false, excludeEscape = false } = {}) {
   ensureListening();
   if (!isAvailable) {
     onCaptured?.(null);
@@ -156,10 +160,12 @@ function startCapture(onCaptured, { excludeLeftClick = false } = {}) {
   }
   captureCallback = onCaptured;
   captureExcludeLeftClick = excludeLeftClick;
+  captureExcludeEscape = excludeEscape;
   captureTimeout = setTimeout(() => {
     const cb = captureCallback;
     captureCallback = null;
     captureExcludeLeftClick = false;
+    captureExcludeEscape = false;
     cb?.(null);
   }, 15000);
 }
@@ -167,6 +173,7 @@ function startCapture(onCaptured, { excludeLeftClick = false } = {}) {
 function cancelCapture() {
   captureCallback = null;
   captureExcludeLeftClick = false;
+  captureExcludeEscape = false;
   if (captureTimeout) {
     clearTimeout(captureTimeout);
     captureTimeout = null;

@@ -5,6 +5,7 @@ let mouse, keyboard, Button, Key, Point;
 try {
   ({ mouse, keyboard, Button, Key, Point } = require('@nut-tree-fork/nut-js'));
   mouse.config.autoDelayMs = 0;
+  mouse.config.mouseSpeed = 9999;
 } catch (err) {
   console.warn('Could not load nut-js for macro playback');
 }
@@ -139,6 +140,8 @@ function resolveNutKey(keyName) {
 
 let playing = false;
 let playToken = 0;
+const heldKeys = new Set();
+const heldButtons = new Set();
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
@@ -169,14 +172,18 @@ async function playOnce(macroEvents, token, triggerBinding, instantStart) {
     if (wait > 0) await sleep(wait);
     if (token !== playToken) return false;
 
-    try {
+      try {
       if ((ev.type === 'mousedown' || ev.type === 'mouseup') && mouse) {
         if (triggerBinding?.type === 'mouse' && triggerBinding.button === ev.button) {
           // skip trigger button
         } else if (ev.type === 'mousedown') {
-          await mouse.pressButton((MOUSE_BTN_MAP[ev.button] || MOUSE_BTN_MAP[1])());
+          const btn = (MOUSE_BTN_MAP[ev.button] || MOUSE_BTN_MAP[1])();
+          await mouse.pressButton(btn);
+          heldButtons.add(ev.button);
         } else {
-          await mouse.releaseButton((MOUSE_BTN_MAP[ev.button] || MOUSE_BTN_MAP[1])());
+          const btn = (MOUSE_BTN_MAP[ev.button] || MOUSE_BTN_MAP[1])();
+          await mouse.releaseButton(btn);
+          heldButtons.delete(ev.button);
         }
       } else if ((ev.type === 'keydown' || ev.type === 'keyup') && keyboard) {
         if (triggerBinding?.type === 'keyboard' && triggerBinding.keyName === ev.keyName) {
@@ -184,10 +191,10 @@ async function playOnce(macroEvents, token, triggerBinding, instantStart) {
         } else {
           const k = resolveNutKey(ev.keyName);
           if (ev.type === 'keydown') {
-            if (k !== null) await keyboard.pressKey(k);
+            if (k !== null) { await keyboard.pressKey(k); heldKeys.add(k); }
             else console.warn('macro: no key mapping for', ev.keyName);
           } else {
-            if (k !== null) await keyboard.releaseKey(k);
+            if (k !== null) { await keyboard.releaseKey(k); heldKeys.delete(k); }
           }
         }
       } else if (ev.type === 'wheel' && mouse) {
@@ -236,9 +243,25 @@ async function play(macroEvents, { loop = 1, speed = 1, instant = false, instant
   }
 }
 
+async function releaseAll() {
+  if (keyboard) {
+    for (const k of heldKeys) {
+      try { await keyboard.releaseKey(k); } catch (_) {}
+    }
+  }
+  if (mouse) {
+    for (const b of heldButtons) {
+      try { await mouse.releaseButton((MOUSE_BTN_MAP[b] || MOUSE_BTN_MAP[1])()); } catch (_) {}
+    }
+  }
+  heldKeys.clear();
+  heldButtons.clear();
+}
+
 function stop() {
   playing = false;
   playToken++;
+  releaseAll();
 }
 
 function isPlaying() { return playing; }

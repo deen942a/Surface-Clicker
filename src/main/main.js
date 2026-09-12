@@ -291,7 +291,7 @@ ipcMain.handle('macro:startHotkeyCapture', (_event, id) => {
     store.setMacroHotkey(id, withLabel);
     registerMacroHotkey({ id, hotkey: withLabel });
     mainWindow?.webContents.send('macro:hotkeyCaptured', { id });
-  }, { excludeLeftClick: true });
+  }, { excludeLeftClick: true, excludeEscape: true });
   return true;
 });
 ipcMain.handle('macro:cancelHotkeyCapture', () => { hotkeys.cancelCapture(); return true; });
