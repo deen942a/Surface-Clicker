@@ -10,6 +10,8 @@ files:
 win:
   icon: assets/SurfaceClicker.ico
   target: nsis
+nsis:
+  artifactName: Surface-Clicker-Setup.exe
 mac:
   icon: assets/SurfaceClicker.icns
   target: dmg

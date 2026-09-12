@@ -52,9 +52,18 @@ function listOpenWindows() {
     let out = '';
     ps.stdout.on('data', (d) => (out += d.toString()));
     ps.on('close', () => {
+
+
+      const clean = (title) => {
+        let t = title.trim();
+        const match = t.match(/^.+[-–|]\s*(.+)$/);
+        if (match) return match[1].trim();
+        return t;
+      };
+
       const titles = out
         .split(/\r?\n/)
-        .map((t) => t.trim())
+        .map((t) => clean(t))
         .filter(Boolean);
       resolve([...new Set(titles)]);
     });

@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, Menu, dialog } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 const fs = require('fs');
+const os = require('os');
 
 const store = require('./store');
 const clicker = require('./clicker');
@@ -9,6 +10,7 @@ const hotkeys = require('./hotkeys');
 const edgeStop = require('./edgeStop');
 const appLock = require('./appLock');
 const overlay = require('./overlay');
+const macro = require('./macro');
 
 let mainWindow;
 const appLaunchTime = Date.now();
@@ -55,6 +57,12 @@ function createWindow() {
 
   mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
 
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (input.type === 'keyDown' && (input.key === 'F5' || (input.control && input.key.toLowerCase() === 'r'))) {
+      event.preventDefault();
+    }
+  });
+
   // mainWindow.webContents.openDevTools(); 
 }
 
@@ -70,9 +78,18 @@ function registerCurrentBinding() {
   });
 }
 
+function registerRecordHotkeyBinding() {
+  const { recordHotkey } = store.getSettings();
+  hotkeys.registerBinding('__macroRecord__', recordHotkey, {
+    onDown: () => mainWindow?.webContents.send('macro:recordHotkeyTriggered'),
+  });
+}
+
 app.whenReady().then(() => {
+  try { os.setPriority(process.pid, os.constants.priority.PRIORITY_BELOW_NORMAL); } catch (err) {}
   createWindow();
   registerCurrentBinding();
+  registerRecordHotkeyBinding();
   edgeStop.init(() => {
     if (clicker.isRunning()) {
       clicker.stop((status) => {
@@ -83,6 +100,7 @@ app.whenReady().then(() => {
       overlay.getWindow()?.webContents.send('overlay:status', { running: false });
     }
   });
+  registerAllMacroHotkeys();
   edgeStop.setEnabled(store.getSettings().edgeStop);
   applyLoginItemSettings(store.getSettings().launchOnStartup);
   appLock.setEnabled(store.getSettings().appLockEnabled);
@@ -100,8 +118,11 @@ app.on('window-all-closed', () => {
 });
 
 app.on('will-quit', () => {
-  hotkeys.shutdown();
+  macro.stop();
   clicker.stop();
+  hotkeys.shutdown();          
+  const { shutdown: rawShutdown } = require('./rawInput');
+  rawShutdown();             
   overlay.destroyOverlay();
 });
 
@@ -112,8 +133,8 @@ ipcMain.handle('settings:set', (_event, partial) => {
   const updated = store.setSettings(partial);
   if (partial.launchOnStartup !== undefined) {
     applyLoginItemSettings(partial.launchOnStartup);
-    if (partial.edgeStop !== undefined) edgeStop.setEnabled(partial.edgeStop);
   }
+  if (partial.edgeStop !== undefined) edgeStop.setEnabled(partial.edgeStop);
   if (partial.appLockEnabled !== undefined) appLock.setEnabled(partial.appLockEnabled);
   if (partial.appLockTarget !== undefined) appLock.setTarget(partial.appLockTarget);
   mainWindow?.webContents.send('settings:updated', updated);
@@ -177,6 +198,103 @@ ipcMain.handle('presets:list', () => store.getPresets());
 ipcMain.handle('presets:save', (_event, preset) => store.savePreset(preset));
 
 ipcMain.handle('presets:delete', (_event, id) => store.deletePreset(id));
+
+let currentPlayingMacroId = null;
+
+function playMacroById(id, { loop, speed, instant = false, instantStart = true, triggerBinding } = {}) {
+  const found = store.getMacros().find((m) => m.id === id);
+  if (!found) return false;
+  currentPlayingMacroId = id;
+  const binding = triggerBinding ?? found.hotkey ?? null;
+  console.log('[macro] playing with triggerBinding:', JSON.stringify(binding));
+  macro.play(found.events, { loop: loop ?? found.loop ?? 1, speed: speed ?? found.speed ?? 1, instant, instantStart, triggerBinding: binding }, () => {
+    currentPlayingMacroId = null;
+    mainWindow?.webContents.send('macro:playDone');
+  });
+  return true;
+}
+
+function stopMacroPlayback() {
+  macro.stop();
+  currentPlayingMacroId = null;
+  mainWindow?.webContents.send('macro:playDone');
+}
+
+const macroCooldowns = {};
+
+function registerMacroHotkey(m) {
+  if (!m.hotkey) return;
+  hotkeys.registerBinding(`macro:${m.id}`, m.hotkey, {
+    onDown: () => {
+      const now = Date.now();
+      const last = macroCooldowns[m.id] || 0;
+      if (now - last < 500) return; // ignore re-triggers within 500ms
+      macroCooldowns[m.id] = now;
+      if (macro.isPlaying() && currentPlayingMacroId === m.id) {
+        stopMacroPlayback();
+      } else if (!macro.isPlaying()) {
+        playMacroById(m.id, { triggerBinding: m.hotkey });
+      }
+    },
+  });
+}
+
+function registerAllMacroHotkeys() {
+  store.getMacros().forEach((m) => registerMacroHotkey(m));
+}
+
+ipcMain.handle('macro:startRecord', (_event, triggerBinding) => {
+  const { recordHotkey } = store.getSettings();
+  macro.startRecording(triggerBinding, recordHotkey);
+  return true;
+});
+ipcMain.handle('macro:stopRecord', () => {
+  return macro.stopRecording();
+});
+ipcMain.handle('macro:list', () => store.getMacros());
+ipcMain.handle('macro:save', (_event, m) => {
+  const updated = store.saveMacro(m);
+  const saved = updated[updated.length - 1];
+  registerMacroHotkey(saved);
+  return updated;
+});
+ipcMain.handle('macro:delete', (_event, id) => {
+  hotkeys.unregisterBinding(`macro:${id}`);
+  return store.deleteMacro(id);
+});
+ipcMain.handle('macro:play', (_event, { id, loop, speed, instant, instantStart }) => playMacroById(id, { loop, speed, instant, instantStart }));
+ipcMain.handle('macro:stopPlay', () => { stopMacroPlayback(); return true; });
+
+ipcMain.handle('macro:startRecordHotkeyCapture', () => {
+  hotkeys.startCapture((binding) => {
+    const withLabel = binding ? { ...binding, label: hotkeys.bindingLabel(binding) } : null;
+    store.setSettings({ recordHotkey: withLabel });
+    registerRecordHotkeyBinding();
+    mainWindow?.webContents.send('macro:recordHotkeySet', withLabel);
+  }, { excludeLeftClick: true });
+  return true;
+});
+ipcMain.handle('macro:cancelRecordHotkeyCapture', () => { hotkeys.cancelCapture(); return true; });
+
+ipcMain.handle('macro:captureNewHotkey', () => {
+  hotkeys.startCapture((binding) => {
+    mainWindow?.webContents.send('macro:newHotkeyCaptured', binding ? { ...binding, label: hotkeys.bindingLabel(binding) } : null);
+  }, { excludeLeftClick: true });
+  return true;
+});
+ipcMain.handle('macro:cancelNewHotkeyCapture', () => { hotkeys.cancelCapture(); return true; });
+
+ipcMain.handle('macro:startHotkeyCapture', (_event, id) => {
+  hotkeys.startCapture((binding) => {
+    if (!binding) return;
+    const withLabel = { ...binding, label: hotkeys.bindingLabel(binding) };
+    store.setMacroHotkey(id, withLabel);
+    registerMacroHotkey({ id, hotkey: withLabel });
+    mainWindow?.webContents.send('macro:hotkeyCaptured', { id });
+  }, { excludeLeftClick: true, excludeEscape: true });
+  return true;
+});
+ipcMain.handle('macro:cancelHotkeyCapture', () => { hotkeys.cancelCapture(); return true; });
 
 
 let currentSessionMeta = { mode: null, presetName: null };
@@ -270,7 +388,41 @@ ipcMain.handle('overlay:toggle', (_e, enabled) => {
   enabled ? overlay.createOverlay() : overlay.destroyOverlay();
   return enabled;
 });
-ipcMain.handle('overlay:setAlwaysOnTop', (_e, val) => {
+ipcMain.handle('app:openExternal', (_e, url) => {
+  const { shell } = require('electron');
+  shell.openExternal(url);
+});
+
+ipcMain.handle('app:checkUpdate', async () => {
+  try {
+    const { net } = require('electron');
+    const request = net.request('https://api.github.com/repos/deen942a/Surface-Clicker/releases/latest');
+    return await new Promise((resolve) => {
+      let data = '';
+      request.on('response', (response) => {
+        response.on('data', (chunk) => { data += chunk.toString(); });
+        response.on('end', () => {
+          try {
+            const json = JSON.parse(data);
+            const latest = json.tag_name?.replace(/^v/, '');
+            const current = require('../../package.json').version;
+            resolve({ latest, current, hasUpdate: latest !== current, url: json.html_url });
+          } catch {
+            resolve({ error: 'Failed to parse response' });
+          }
+        });
+      });
+      request.on('error', () => resolve({ error: 'Network error' }));
+      request.end();
+    });
+  } catch {
+    return { error: 'Update check failed' };
+  }
+});
+
+ipcMain.handle('app:getVersion', () => app.getVersion());
+
+ipcMain.handle('overlay:setAlwaysOnTop', (_e, val) => {  
   overlay.getWindow()?.setAlwaysOnTop(!!val, 'screen-saver');
   return val;
 });

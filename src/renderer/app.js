@@ -39,10 +39,21 @@ const svCursor = document.getElementById('sv-cursor');
 const svCtx = svCanvas.getContext('2d');
 const hueWrap = document.getElementById('hue-wrap');
 const hueThumb = document.getElementById('hue-thumb');
+const statsToggle = document.getElementById('stats-toggle');
 const soundToggle = document.getElementById('sound-toggle');
 soundToggle.addEventListener('change', () => {
   state.soundEnabled = soundToggle.checked;
   persistSettings();
+});
+
+if (statsToggle) statsToggle.addEventListener('change', () => {
+  state.statsEnabled = statsToggle.checked;
+  persistSettings();
+  if (state.statsEnabled) {
+    startSessionPolling();
+  } else {
+    stopSessionPolling();
+  }
 });
 
 let audioCtx = null;
@@ -323,6 +334,7 @@ async function pollSessionStats() {
 }
 function startSessionPolling() {
   stopSessionPolling();
+  if (state.statsEnabled === false) return;
   pollSessionStats();
   sessionPollInterval = setInterval(pollSessionStats, 1000);
 }
@@ -347,13 +359,14 @@ let state = {
   launchOnStartup: false,
   activationKey: { type: 'keyboard', keyName: 'F6', label: 'F6' },
   running: false,
+  statsEnabled: true,
 };
 
 let listeningForKey = false;
 let holdKeyDown = false;
 
 function fmt(n) {
-  return Number.isInteger(n) ? String(n) : n.toFixed(1);
+  return Number.isInteger(n) ? String(n) : n.toFixed(2);
 }
 
 function updateStatUI() {
@@ -391,6 +404,28 @@ themeSwatches.forEach((el) => {
   startupToggle.addEventListener('change', () => {
     state.launchOnStartup = startupToggle.checked;
     persistSettings();
+  });
+
+  document.getElementById('check-update-btn').addEventListener('click', async () => {
+    const btn = document.getElementById('check-update-btn');
+    const status = document.getElementById('update-status');
+    btn.disabled = true;
+    btn.textContent = 'Checking…';
+    const result = await window.surfaceClicker.checkUpdate();
+    btn.disabled = false;
+    btn.textContent = 'Check';
+    const downloadBtn = document.getElementById('download-update-btn');
+    if (result.error) {
+      status.textContent = `Error: ${result.error}`;
+      downloadBtn.style.display = 'none';
+    } else if (result.hasUpdate) {
+      status.textContent = `Update available: v${result.latest} (you have v${result.current})`;
+      downloadBtn.style.display = '';
+      downloadBtn.onclick = () => window.surfaceClicker.openExternal(result.url);
+    } else {
+      status.textContent = `You're up to date (v${result.current})`;
+      downloadBtn.style.display = 'none';
+    }
   });
 
   uninstallBtn.addEventListener('click', async () => {
@@ -482,9 +517,12 @@ function persistSettings() {
     launchOnStartup: state.launchOnStartup,
     appLockEnabled: state.appLockEnabled,
     appLockTarget: state.appLockTarget,
+    edgeStop: state.edgeStop,
     overlayEnabled: state.overlayEnabled,
     soundEnabled: state.soundEnabled,
+    statsEnabled: state.statsEnabled,
     performanceMode: state.performanceMode,
+    startupSoundEnabled: state.startupSoundEnabled,
   });
 }
 
@@ -500,7 +538,9 @@ navItems.forEach((item) => {
     });
 
     if (page === 'stats') {
-      startSessionPolling();
+      if (state.statsEnabled !== false && !state.performanceMode) {
+        startSessionPolling();
+      }
     } else {
       stopSessionPolling();
     }
@@ -572,7 +612,7 @@ makeValueEditable(
 makeValueEditable(
   cdcValue,
   cdcSlider,
-  { min: 1, max: 100, clampToSlider: true },
+  { min: 1, max: 1000, clampToSlider: false },
   (n) => {
     state.dutyCycle = n;
     slidersToState();
@@ -686,7 +726,7 @@ window.surfaceClicker.onHotkeyDown(() => {
       startClicking();
     }
   } else if (state.mode === 'hold') {
-    if (!holdKeyDown && !state.running) {
+    if (!state.running) {
       holdKeyDown = true;
       startClicking();
     }
@@ -746,15 +786,21 @@ async function init() {
   appLockToggle.checked = !!state.appLockEnabled;
   overlayToggle.checked = !!state.overlayEnabled;
   soundToggle.checked = state.soundEnabled !== false;
+  startupSoundToggle.checked = state.startupSoundEnabled !== false;
   applockTrigger.textContent = state.appLockTarget || 'No app set';
   applockTrigger.classList.toggle('set', !!state.appLockTarget);
   await refreshOpenWindows();
 
   performanceToggle.checked = !!state.performanceMode;
   document.body.classList.toggle('perf-mode', !!state.performanceMode);
+  statsToggle.checked = state.statsEnabled !== false;
 
   const presets = await window.surfaceClicker.listPresets();
   renderPresets(presets);
+
+  const macros = await window.surfaceClicker.macroList();
+  renderMacros(macros);
+  if (state.recordHotkey) macroRecordHotkeyLabel.textContent = state.recordHotkey.label;
 
   const stats = await window.surfaceClicker.getStats();
   renderLifetimeStats(stats);
@@ -762,6 +808,9 @@ async function init() {
   pages.forEach((p) => {
     p.style.display = p.dataset.page === 'main' ? '' : 'none';
   });
+  const ver = await window.surfaceClicker.getVersion();
+  const verEl = document.getElementById('app-version');
+  if (verEl) verEl.textContent = `v${ver}`;
 }
 
 let startupSoundPlayed = false;
@@ -833,4 +882,155 @@ document.addEventListener('click', (e) => {
 
 applockRefreshBtn.addEventListener('click', refreshOpenWindows);
 
-init();
+const macroSetHotkeyBtn = document.getElementById('macro-set-hotkey-btn');
+const macroHotkeyLabel = document.getElementById('macro-hotkey-label');
+const macroRecordBtn = document.getElementById('macro-record-btn');
+const macroRecordLabel = document.getElementById('macro-record-label');
+const macroList = document.getElementById('macro-list');
+const macroEmpty = document.getElementById('macro-empty');
+const macroSaveRow = document.getElementById('macro-save-row');
+const macroNameInput = document.getElementById('macro-name');
+const macroSaveBtn = document.getElementById('macro-save-btn');
+const macroDiscardBtn = document.getElementById('macro-discard-btn');
+const macroLoopInput = document.getElementById('macro-loop');
+const macroSpeedSlider = document.getElementById('macro-speed');
+const macroSpeedVal = document.getElementById('macro-speed-val');
+
+let isRecordingMacro = false;
+let pendingMacroEvents = null;
+let pendingMacroHotkey = null;
+
+macroSpeedSlider.addEventListener('input', () => {
+  macroSpeedVal.textContent = parseFloat(macroSpeedSlider.value) + 'x';
+});
+
+function resetHotkeyStep() {
+  pendingMacroHotkey = null;
+  macroHotkeyLabel.textContent = 'Set Hotkey';
+}
+
+macroSetHotkeyBtn.addEventListener('click', async () => {
+  macroHotkeyLabel.textContent = 'Press key/button…';
+  await window.surfaceClicker.macroCaptureNewHotkey();
+});
+
+window.surfaceClicker.onNewMacroHotkeyCaptured((binding) => {
+  if (!binding) {
+    macroHotkeyLabel.textContent = 'Set Hotkey';
+    return;
+  }
+  pendingMacroHotkey = binding;
+  macroHotkeyLabel.textContent = binding.label;
+});
+
+async function toggleRecording() {
+  if (!isRecordingMacro) {
+    isRecordingMacro = true;
+    macroRecordLabel.textContent = 'Stop';
+    macroRecordBtn.classList.add('running');
+    macroSaveRow.style.display = 'none';
+    await window.surfaceClicker.macroStartRecord(pendingMacroHotkey, pendingMacroHotkey);
+  } else {
+    isRecordingMacro = false;
+    macroRecordLabel.textContent = 'Record';
+    macroRecordBtn.classList.remove('running');
+    pendingMacroEvents = await window.surfaceClicker.macroStopRecord(pendingMacroHotkey);
+    macroSaveRow.style.display = 'flex';
+    macroNameInput.focus();
+  }
+}
+
+macroRecordBtn.addEventListener('click', toggleRecording);
+
+const macroSetRecordHotkeyBtn = document.getElementById('macro-set-record-hotkey-btn');
+const macroRecordHotkeyLabel = document.getElementById('macro-record-hotkey-label');
+
+macroSetRecordHotkeyBtn.addEventListener('click', async () => {
+  macroRecordHotkeyLabel.textContent = 'Press key/button…';
+  await window.surfaceClicker.macroSetRecordHotkey();
+});
+
+window.surfaceClicker.onMacroRecordHotkeySet((binding) => {
+  macroRecordHotkeyLabel.textContent = binding ? binding.label : 'Record Hotkey';
+});
+
+window.surfaceClicker.onMacroRecordHotkeyTriggered(toggleRecording);
+
+macroDiscardBtn.addEventListener('click', () => {
+  pendingMacroEvents = null;
+  macroNameInput.value = '';
+  macroSaveRow.style.display = 'none';
+  resetHotkeyStep();
+});
+
+macroSaveBtn.addEventListener('click', async () => {
+  const name = macroNameInput.value.trim();
+  if (!name || !pendingMacroEvents) { macroNameInput.focus(); return; }
+  const loop = parseInt(macroLoopInput.value, 10) || 0;
+  const speed = parseFloat(macroSpeedSlider.value) || 1;
+  const updated = await window.surfaceClicker.macroSave({
+    name, events: pendingMacroEvents, loop, speed, hotkey: pendingMacroHotkey,
+  });
+  pendingMacroEvents = null;
+  macroNameInput.value = '';
+  macroSaveRow.style.display = 'none';
+  resetHotkeyStep();
+  renderMacros(updated);
+});
+
+function renderMacros(macros) {
+  macroList.querySelectorAll('.preset-item').forEach((el) => el.remove());
+  if (!macros || macros.length === 0) { macroEmpty.style.display = 'flex'; return; }
+  macroEmpty.style.display = 'none';
+
+  macros.forEach((macro) => {
+    const durationMs = macro.events.length ? macro.events[macro.events.length - 1].t : 0;
+    const actionCount = Math.max(0, macro.events.length - 1);
+    const item = document.createElement('div');
+    item.className = 'preset-item';
+    item.innerHTML = `
+      <div class="preset-item-info">
+        <div class="name">${escapeHtml(macro.name)}</div>
+        <div class="details">${actionCount} events · ${(durationMs / 1000).toFixed(1)}s</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:5px;flex-shrink:0;margin-left:10px;">
+        <button class="preset-equip-btn macro-hotkey-btn" title="Set hotkey (any key, or mouse button other than left-click)" style="width:auto;min-width:60px;padding:0 8px;">${escapeHtml(macro.hotkey?.label || 'Hotkey')}</button>
+        <button class="preset-equip-btn macro-play-btn" title="Play macro">Play</button>
+        <button class="preset-delete-btn" title="Delete macro">✕</button>
+      </div>
+    `;
+    const hotkeyBtn = item.querySelector('.macro-hotkey-btn');
+    hotkeyBtn.addEventListener('click', async () => {
+      hotkeyBtn.textContent = 'Press...';
+      await window.surfaceClicker.macroStartHotkeyCapture(macro.id);
+    });
+    const playBtn = item.querySelector('.macro-play-btn');
+    playBtn.addEventListener('click', async () => {
+      if (playBtn.textContent === 'Stop') {
+        await window.surfaceClicker.macroStopPlay();
+        playBtn.textContent = 'Play';
+        return;
+      }
+      const loop = parseInt(macroLoopInput.value, 10) || 0;
+      const speed = parseFloat(macroSpeedSlider.value) || 1;
+      const instant = document.getElementById('macro-instant')?.checked || false;
+      const instantStart = document.getElementById('macro-instant-start')?.checked || false;
+      playBtn.textContent = 'Stop';
+      await window.surfaceClicker.macroPlay({ id: macro.id, loop, speed, instant, instantStart });
+    });
+    item.querySelector('.preset-delete-btn').addEventListener('click', async () => {
+      const updated = await window.surfaceClicker.macroDelete(macro.id);
+      renderMacros(updated);
+    });
+    macroList.appendChild(item);
+  });
+}
+
+window.surfaceClicker.onMacroPlayDone(() => {
+  document.querySelectorAll('.macro-play-btn').forEach((b) => { b.textContent = 'Play'; });
+});
+
+window.surfaceClicker.onMacroHotkeyCaptured(async () => {
+  const macros = await window.surfaceClicker.macroList();
+  renderMacros(macros);
+});

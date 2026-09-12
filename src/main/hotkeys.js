@@ -6,11 +6,12 @@ const {
   MOUSE_BUTTON_LABELS,
 } = require('./rawInput');
 
-let activeBinding = null;
-let activeHandlers = null;
+const bindings = new Map();
 
 let captureCallback = null;
 let captureTimeout = null;
+let captureExcludeLeftClick = false;
+let captureExcludeEscape = false;
 
 let listening = false;
 
@@ -49,10 +50,8 @@ function bindingLabel(binding) {
   return null;
 }
 
-function modsMatch(a, b) {
-  const A = a || { ctrl: false, shift: false, alt: false, meta: false };
-  const B = b || { ctrl: false, shift: false, alt: false, meta: false };
-  return A.ctrl === B.ctrl && A.shift === B.shift && A.alt === B.alt && A.meta === B.meta;
+function modsMatch(_a, _b) {
+  return true; // ignore modifier state so the binding fires even if Ctrl/Shift/Alt/Meta is held
 }
 
 function bindingsMatch(a, b) {
@@ -66,6 +65,7 @@ function bindingsMatch(a, b) {
 function finishCapture(binding) {
   const cb = captureCallback;
   captureCallback = null;
+  captureExcludeLeftClick = false;
   if (captureTimeout) {
     clearTimeout(captureTimeout);
     captureTimeout = null;
@@ -76,35 +76,48 @@ function finishCapture(binding) {
 function handleKeyDown(evt) {
   const keyName = KEY_NAME_BY_CODE[evt.keycode] || `Key${evt.keycode}`;
   if (captureCallback) {
-    if (isModifierKey(keyName)) return; 
+    if (isModifierKey(keyName)) return;
+    if (captureExcludeEscape && keyName === 'Escape') return;
     finishCapture({ type: 'keyboard', keyName, modifiers: modsFromEvent(evt) });
     return;
   }
-  if (bindingsMatch(activeBinding, { type: 'keyboard', keyName, modifiers: modsFromEvent(evt) })) {
-    activeHandlers?.onDown?.();
+  const macro = require('./macro');
+  const evtBinding = { type: 'keyboard', keyName, modifiers: modsFromEvent(evt) };
+  for (const [id, { binding, handlers }] of bindings.entries()) {
+    if (bindingsMatch(binding, evtBinding)) {
+      if (macro.isPlaying() && !id.startsWith('macro:')) continue;
+      handlers?.onDown?.();
+    }
   }
 }
 
 function handleKeyUp(evt) {
+  if (captureCallback) return;
   const keyName = KEY_NAME_BY_CODE[evt.keycode] || `Key${evt.keycode}`;
-  if (activeBinding?.type === 'keyboard' && activeBinding.keyName === keyName) {
-    activeHandlers?.onUp?.();
+  for (const { binding, handlers } of bindings.values()) {
+    if (binding?.type === 'keyboard' && binding.keyName === keyName) handlers?.onUp?.();
   }
 }
 
 function handleMouseDown(evt) {
+  // console.log('[hotkeys] mousedown button:', evt.button);
   if (captureCallback) {
+    if (captureExcludeLeftClick && evt.button === 1) return;
     finishCapture({ type: 'mouse', button: evt.button, modifiers: modsFromEvent(evt) });
     return;
   }
-  if (bindingsMatch(activeBinding, { type: 'mouse', button: evt.button, modifiers: modsFromEvent(evt) })) {
-    activeHandlers?.onDown?.();
+  const macro = require('./macro');
+  if (macro.isPlaying()) return;
+  const evtBinding = { type: 'mouse', button: evt.button, modifiers: modsFromEvent(evt) };
+  for (const { binding, handlers } of bindings.values()) {
+    if (bindingsMatch(binding, evtBinding)) handlers?.onDown?.();
   }
 }
 
 function handleMouseUp(evt) {
-  if (activeBinding?.type === 'mouse' && activeBinding.button === evt.button) {
-    activeHandlers?.onUp?.();
+  if (captureCallback) return;
+  for (const { binding, handlers } of bindings.values()) {
+    if (binding?.type === 'mouse' && binding.button === evt.button) handlers?.onUp?.();
   }
 }
 
@@ -118,32 +131,49 @@ function ensureListening() {
   listening = true;
 }
 
+const CLICKER_BINDING_ID = '__clicker__';
+
 function registerActivation(binding, handlers) {
+  return registerBinding(CLICKER_BINDING_ID, binding, handlers);
+}
+
+function registerBinding(id, binding, handlers) {
   ensureListening();
-  activeBinding = binding || null;
-  activeHandlers = handlers || null;
+  if (binding) bindings.set(id, { binding, handlers });
+  else bindings.delete(id);
   return isAvailable;
 }
 
-function unregisterAll() {
-  activeBinding = null;
-  activeHandlers = null;
+function unregisterBinding(id) {
+  bindings.delete(id);
 }
 
-function startCapture(onCaptured) {
+function unregisterAll() {
+  bindings.clear();
+}
+
+function startCapture(onCaptured, { excludeLeftClick = false, excludeEscape = false } = {}) {
   ensureListening();
   if (!isAvailable) {
     onCaptured?.(null);
     return;
   }
   captureCallback = onCaptured;
+  captureExcludeLeftClick = excludeLeftClick;
+  captureExcludeEscape = excludeEscape;
   captureTimeout = setTimeout(() => {
+    const cb = captureCallback;
     captureCallback = null;
+    captureExcludeLeftClick = false;
+    captureExcludeEscape = false;
+    cb?.(null);
   }, 15000);
 }
 
 function cancelCapture() {
   captureCallback = null;
+  captureExcludeLeftClick = false;
+  captureExcludeEscape = false;
   if (captureTimeout) {
     clearTimeout(captureTimeout);
     captureTimeout = null;
@@ -157,6 +187,8 @@ function shutdown() {
 
 module.exports = {
   registerActivation,
+  registerBinding,
+  unregisterBinding,
   unregisterAll,
   startCapture,
   cancelCapture,

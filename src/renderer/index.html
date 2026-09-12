@@ -30,9 +30,9 @@
           <i class="ti ti-cursor-text"></i>
           <span>Main</span>
         </div>
-        <div class="nav-item" data-page="settings">
-          <i class="ti ti-settings-2"></i>
-          <span>Settings</span>
+        <div class="nav-item" data-page="macros">
+          <i class="ti ti-player-record"></i>
+          <span>Macros</span>
         </div>
         <div class="nav-item" data-page="extras">
           <i class="ti ti-sparkles"></i>
@@ -42,11 +42,18 @@
           <i class="ti ti-chart-line"></i>
           <span>Stats</span>
         </div>
+        <div class="nav-item" data-page="settings">
+          <i class="ti ti-settings-2"></i>
+          <span>Settings</span>
+        </div>
       </nav>
 
       <div class="status">
         <div class="status-dot" id="status-dot"></div>
         <span id="status-text">idle</span>
+      </div>
+      <div id="app-version" style="padding:6px 8px 0;font-size:9px;color:rgba(255,255,255,0.15);letter-spacing:0.5px;">
+        v1.0.0
       </div>
     </aside>
 
@@ -174,6 +181,18 @@
             <span class="switch-track"></span>
           </label>
         </div>
+        <div class="section-label">Updates</div>
+        <div class="setting-row">
+          <div class="setting-row-label">
+            <div class="setting-row-title">Check for updates</div>
+            <div class="setting-row-sub" id="update-status">Click to check for a newer version</div>
+          </div>
+          <div style="display:flex;gap:8px;flex-shrink:0;">
+            <button class="btn btn-primary" id="check-update-btn">Check</button>
+            <button class="btn btn-primary" id="download-update-btn" style="display:none;">Download</button>
+          </div>
+        </div>
+
         <div class="section-label">Danger Zone</div>
         <div class="setting-row danger-row">
           <div class="setting-row-label">
@@ -282,6 +301,18 @@
       </label>
     </div>
 
+    <div class="section-label">Stats</div>
+    <div class="setting-row">
+      <div class="setting-row-label">
+        <div class="setting-row-title">Enable session stats</div>
+        <div class="setting-row-sub">Disable to reduce IPC overhead during gameplay</div>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="stats-toggle" checked />
+        <span class="switch-track"></span>
+      </label>
+    </div>
+
     <div class="section-label">Sound</div>
     <div class="setting-row">
       <div class="setting-row-label">
@@ -303,6 +334,56 @@
         <input type="checkbox" id="startup-sound-toggle" />
         <span class="switch-track"></span>
       </label>
+    </div>
+  </div>
+
+  <div class="page" data-page="macros">
+    <header class="main-header">
+      <span class="page-title">Macros</span>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button class="btn-ghost" id="macro-set-record-hotkey-btn">
+          <i class="ti ti-keyboard"></i>
+          <span id="macro-record-hotkey-label">Record Hotkey</span>
+        </button>
+        <button class="btn btn-primary" id="macro-record-btn">
+          <span id="macro-record-label">Record</span>
+        </button>
+      </div>
+    </header>
+
+    <div class="section-label">Playback</div>
+    <div class="key-row">
+      <input type="number" id="macro-loop" min="0" value="1" style="width:60px;height:38px;border-radius:9px;background:rgba(255,255,255,0.025);border:1px solid rgba(var(--accent-rgb),0.2);color:#fff;padding:0 10px;font-family:'Plus Jakarta Sans',sans-serif;" />
+      <div class="setting-row-sub">loops (0 = infinite)</div>
+      <input type="range" id="macro-speed" min="0.25" max="4" step="0.25" value="1" style="flex:1;margin-left:14px;" />
+      <span id="macro-speed-val" style="width:38px;flex-shrink:0;font-size:12px;">1x</span>
+      <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:rgba(255,255,255,0.5);margin-left:14px;white-space:nowrap;">
+        <input type="checkbox" id="macro-instant" style="width:14px;height:14px;" />
+        Instant
+      </label>
+      <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:rgba(255,255,255,0.5);margin-left:14px;white-space:nowrap;">
+        <input type="checkbox" id="macro-instant-start" style="width:14px;height:14px;" checked />
+        No start delay
+      </label>
+    </div>
+
+    <div class="section-label">Saved Macros</div>
+    <div class="preset-list" id="macro-list">
+      <div class="preset-empty" id="macro-empty">
+        <i class="ti ti-player-record"></i>
+        <div class="preset-empty-title">No macros recorded yet</div>
+        <div class="preset-empty-sub">Hit Record to capture mouse + keyboard actions</div>
+      </div>
+    </div>
+
+    <div class="preset-save-row" id="macro-save-row" style="display:none;">
+      <input type="text" id="macro-name" placeholder="Name this macro…" />
+      <button class="btn-ghost" id="macro-set-hotkey-btn">
+        <i class="ti ti-keyboard"></i>
+        <span id="macro-hotkey-label">Set Hotkey</span>
+      </button>
+      <button class="btn btn-primary" id="macro-save-btn"><i class="ti ti-device-floppy"></i> Save</button>
+      <button class="btn btn-danger" id="macro-discard-btn">Discard</button>
     </div>
   </div>
 

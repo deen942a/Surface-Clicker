@@ -45,4 +45,29 @@ contextBridge.exposeInMainWorld('surfaceClicker', {
   listOpenWindows: () => ipcRenderer.invoke('applock:listWindows'),
 
   toggleOverlay: (enabled) => ipcRenderer.invoke('overlay:toggle', enabled),
-});
+  checkUpdate: () => ipcRenderer.invoke('app:checkUpdate'),
+  openExternal: (url) => ipcRenderer.invoke('app:openExternal', url),
+  getVersion: () => ipcRenderer.invoke('app:getVersion'),
+
+  macroStartRecord: (triggerBinding, stopBinding) => ipcRenderer.invoke('macro:startRecord', triggerBinding, stopBinding),
+  macroStopRecord: (triggerBinding) => ipcRenderer.invoke('macro:stopRecord', triggerBinding),
+  macroList: () => ipcRenderer.invoke('macro:list'),
+  macroSave: (m) => ipcRenderer.invoke('macro:save', m),
+  macroDelete: (id) => ipcRenderer.invoke('macro:delete', id),
+  macroPlay: (opts) => ipcRenderer.invoke('macro:play', opts),
+  macroStopPlay: () => ipcRenderer.invoke('macro:stopPlay'),
+  onMacroPlayDone: (callback) => { ipcRenderer.on('macro:playDone', () => callback()); },
+
+  macroStartHotkeyCapture: (id) => ipcRenderer.invoke('macro:startHotkeyCapture', id),
+  macroCancelHotkeyCapture: () => ipcRenderer.invoke('macro:cancelHotkeyCapture'),
+  onMacroHotkeyCaptured: (callback) => { ipcRenderer.on('macro:hotkeyCaptured', (_e, data) => callback(data)); },
+
+  macroCaptureNewHotkey: () => ipcRenderer.invoke('macro:captureNewHotkey'),
+  macroSetRecordHotkey: () => ipcRenderer.invoke('macro:startRecordHotkeyCapture'),
+  macroCancelRecordHotkeyCapture: () => ipcRenderer.invoke('macro:cancelRecordHotkeyCapture'),
+  onMacroRecordHotkeySet: (callback) => ipcRenderer.on('macro:recordHotkeySet', (_e, binding) => callback(binding)),
+  onMacroRecordHotkeyTriggered: (callback) => ipcRenderer.on('macro:recordHotkeyTriggered', () => callback()),
+  macroCancelNewHotkeyCapture: () => ipcRenderer.invoke('macro:cancelNewHotkeyCapture'),
+  onNewMacroHotkeyCaptured: (callback) => { ipcRenderer.on('macro:newHotkeyCaptured', (_e, binding) => callback(binding)); },
+  }
+);

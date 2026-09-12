@@ -65,7 +65,7 @@ pinBtn.addEventListener('click', () => {
 
 function fmt(n) {
   n = parseFloat(n);
-  return Number.isInteger(n) ? String(n) : n.toFixed(1);
+  return Number.isInteger(n) ? String(n) : n.toFixed(2);
 }
 
 function makeValueEditable(valueEl, slider, { min, max }, onCommit) {
@@ -111,7 +111,7 @@ makeValueEditable(cpsVal, cps, { min: 1, max: 100 }, (n) => {
   window.overlayAPI.setCps(n);
 });
 
-makeValueEditable(dcVal, dc, { min: 1, max: 100 }, (n) => {
+makeValueEditable(dcVal, dc, { min: 1, max: 1000 }, (n) => {
   dc.value = n;
   dcVal.innerHTML = fmt(n) + '<span class="unit">%</span>';
   window.overlayAPI.setDutyCycle(n);

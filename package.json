@@ -1,6 +1,6 @@
 {
   "name": "surface-clicker",
-  "version": "1.0.0",
+  "version": "0.1.5",
   "description": "Surface Clicker - a configurable autoclicker with CPS and duty cycle control",
   "main": "src/main/main.js",
   "author": "",
@@ -38,6 +38,9 @@
     "win": {
       "icon": "assets/SurfaceClicker.ico",
       "target": "nsis"
+    },
+    "nsis": {
+      "artifactName": "Surface-Clicker-Setup.exe"
     },
     "mac": {
       "icon": "assets/SurfaceClicker.icns",
