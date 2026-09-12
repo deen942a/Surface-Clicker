@@ -1013,8 +1013,9 @@ function renderMacros(macros) {
       const loop = parseInt(macroLoopInput.value, 10) || 0;
       const speed = parseFloat(macroSpeedSlider.value) || 1;
       const instant = document.getElementById('macro-instant')?.checked || false;
+      const instantStart = document.getElementById('macro-instant-start')?.checked || false;
       playBtn.textContent = 'Stop';
-      await window.surfaceClicker.macroPlay({ id: macro.id, loop, speed, instant });
+      await window.surfaceClicker.macroPlay({ id: macro.id, loop, speed, instant, instantStart });
     });
     item.querySelector('.preset-delete-btn').addEventListener('click', async () => {
       const updated = await window.surfaceClicker.macroDelete(macro.id);

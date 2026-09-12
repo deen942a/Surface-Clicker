@@ -30,9 +30,9 @@
           <i class="ti ti-cursor-text"></i>
           <span>Main</span>
         </div>
-        <div class="nav-item" data-page="settings">
-          <i class="ti ti-settings-2"></i>
-          <span>Settings</span>
+        <div class="nav-item" data-page="macros">
+          <i class="ti ti-player-record"></i>
+          <span>Macros</span>
         </div>
         <div class="nav-item" data-page="extras">
           <i class="ti ti-sparkles"></i>
@@ -42,9 +42,9 @@
           <i class="ti ti-chart-line"></i>
           <span>Stats</span>
         </div>
-        <div class="nav-item" data-page="macros">
-          <i class="ti ti-player-record"></i>
-          <span>Macros</span>
+        <div class="nav-item" data-page="settings">
+          <i class="ti ti-settings-2"></i>
+          <span>Settings</span>
         </div>
       </nav>
 
@@ -346,7 +346,6 @@
           <span id="macro-record-hotkey-label">Record Hotkey</span>
         </button>
         <button class="btn btn-primary" id="macro-record-btn">
-          <i class="ti ti-player-record"></i>
           <span id="macro-record-label">Record</span>
         </button>
       </div>
@@ -361,6 +360,10 @@
       <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:rgba(255,255,255,0.5);margin-left:14px;white-space:nowrap;">
         <input type="checkbox" id="macro-instant" style="width:14px;height:14px;" />
         Instant
+      </label>
+      <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:rgba(255,255,255,0.5);margin-left:14px;white-space:nowrap;">
+        <input type="checkbox" id="macro-instant-start" style="width:14px;height:14px;" checked />
+        No start delay
       </label>
     </div>
 

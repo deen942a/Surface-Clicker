@@ -139,8 +139,8 @@ function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-async function playOnce(macroEvents, token, triggerBinding) {
-  let last = 0;
+async function playOnce(macroEvents, token, triggerBinding, instantStart) {
+  let last = instantStart && macroEvents.length ? macroEvents[0].t : 0;
   let lastX = null;
   let lastY = null;
 
@@ -203,7 +203,7 @@ async function playOnce(macroEvents, token, triggerBinding) {
   return true;
 }
 
-async function play(macroEvents, { loop = 1, speed = 1, instant = false, triggerBinding = null } = {}, onDone) {
+async function play(macroEvents, { loop = 1, speed = 1, instant = false, instantStart = false, triggerBinding = null } = {}, onDone) {
   if (playing) stop();
   playing = true;
   const token = ++playToken;
@@ -221,7 +221,7 @@ async function play(macroEvents, { loop = 1, speed = 1, instant = false, trigger
   let count = 0;
 
   while (playing && token === playToken && (infinite || count < loop)) {
-    const completed = await playOnce(scaled, token, triggerBinding);
+    const completed = await playOnce(scaled, token, triggerBinding, instantStart);
     if (!completed) break;
     count++;
   }
