@@ -11,7 +11,6 @@ const store = new Store({
       theme: 'violet',
       customAccent: null, 
       launchOnStartup: false,
-      launchOnStartup: false,
       edgeStop: false,
       appLockEnabled: false,
       appLockTarget: '',

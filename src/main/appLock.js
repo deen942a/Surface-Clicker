@@ -54,7 +54,7 @@ function listOpenWindows() {
     ps.on('close', () => {
 
 
-      const clean = (title) => {90
+      const clean = (title) => {
         let t = title.trim();
         const match = t.match(/^.+[-–|]\s*(.+)$/);
         if (match) return match[1].trim();

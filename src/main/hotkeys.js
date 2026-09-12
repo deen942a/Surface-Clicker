@@ -49,10 +49,8 @@ function bindingLabel(binding) {
   return null;
 }
 
-function modsMatch(a, b) {
-  const A = a || { ctrl: false, shift: false, alt: false, meta: false };
-  const B = b || { ctrl: false, shift: false, alt: false, meta: false };
-  return A.ctrl === B.ctrl && A.shift === B.shift && A.alt === B.alt && A.meta === B.meta;
+function modsMatch(_a, _b) {
+  return true; // ignore modifier state so the binding fires even if Ctrl/Shift/Alt/Meta is held
 }
 
 function bindingsMatch(a, b) {

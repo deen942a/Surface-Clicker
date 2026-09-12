@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, Menu, dialog } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 const fs = require('fs');
+const os = require('os');
 
 const store = require('./store');
 const clicker = require('./clicker');
@@ -85,6 +86,7 @@ function registerRecordHotkeyBinding() {
 }
 
 app.whenReady().then(() => {
+  try { os.setPriority(process.pid, os.constants.priority.PRIORITY_BELOW_NORMAL); } catch (err) {}
   createWindow();
   registerCurrentBinding();
   registerRecordHotkeyBinding();
@@ -131,8 +133,8 @@ ipcMain.handle('settings:set', (_event, partial) => {
   const updated = store.setSettings(partial);
   if (partial.launchOnStartup !== undefined) {
     applyLoginItemSettings(partial.launchOnStartup);
-    if (partial.edgeStop !== undefined) edgeStop.setEnabled(partial.edgeStop);
   }
+  if (partial.edgeStop !== undefined) edgeStop.setEnabled(partial.edgeStop);
   if (partial.appLockEnabled !== undefined) appLock.setEnabled(partial.appLockEnabled);
   if (partial.appLockTarget !== undefined) appLock.setTarget(partial.appLockTarget);
   mainWindow?.webContents.send('settings:updated', updated);
@@ -199,7 +201,7 @@ ipcMain.handle('presets:delete', (_event, id) => store.deletePreset(id));
 
 let currentPlayingMacroId = null;
 
-function playMacroById(id, { loop, speed, instant = false, instantStart = false, triggerBinding } = {}) {
+function playMacroById(id, { loop, speed, instant = false, instantStart = true, triggerBinding } = {}) {
   const found = store.getMacros().find((m) => m.id === id);
   if (!found) return false;
   currentPlayingMacroId = id;

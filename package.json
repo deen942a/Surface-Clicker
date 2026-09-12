@@ -1,6 +1,6 @@
 {
   "name": "surface-clicker",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Surface Clicker - a configurable autoclicker with CPS and duty cycle control",
   "main": "src/main/main.js",
   "author": "",

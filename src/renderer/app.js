@@ -517,6 +517,7 @@ function persistSettings() {
     launchOnStartup: state.launchOnStartup,
     appLockEnabled: state.appLockEnabled,
     appLockTarget: state.appLockTarget,
+    edgeStop: state.edgeStop,
     overlayEnabled: state.overlayEnabled,
     soundEnabled: state.soundEnabled,
     statsEnabled: state.statsEnabled,

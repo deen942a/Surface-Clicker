@@ -104,6 +104,11 @@ function startRecording(triggerBinding, stopBinding) {
   recordStart = performance.now();
   lastMoveRecorded = 0;
   recording = true;
+  if (mouse) {
+    mouse.getPosition().then((pos) => {
+      events.unshift({ t: 0, type: 'move', x: pos.x, y: pos.y });
+    }).catch(() => {});
+  }
 }
 
 function stopRecording() {
